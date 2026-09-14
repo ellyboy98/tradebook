@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>TradeBook.Api</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SQL Server connectivity for the health check. EF Core arrives in build step 2. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.7" />
+    <!-- Structured logging. Pulls in the console sink, compact JSON formatter and configuration binding. -->
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>
