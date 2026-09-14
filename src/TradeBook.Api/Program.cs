@@ -1,6 +1,8 @@
+using System.Text.Json.Serialization;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using TradeBook.Api.Features.TradeCapture;
 using TradeBook.Api.Infrastructure.Health;
 using TradeBook.Api.Persistence;
 
@@ -23,10 +25,22 @@ try
         .ReadFrom.Services(services)
         .Enrich.FromLogContext());
 
-    builder.Services.AddControllers();
+    builder.Services
+        .AddControllers()
+        // Enums travel as their names ("Buy", "Sell"), matching the API
+        // contract in design.md section 7, rather than as 1 and 2.
+        .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
     builder.Services.AddProblemDetails();
     builder.Services.AddTradeBookPersistence();
     builder.Services.AddTradeBookHealthChecks();
+
+    // Handlers are plain scoped classes (CLAUDE.md): one per request, same
+    // lifetime as the DbContext they use.
+    builder.Services.AddScoped<CaptureTradeHandler>();
+
+    // The clock is injected so "not in the future" can be tested without
+    // waiting, and so the audit timestamps come from one source.
+    builder.Services.AddSingleton(TimeProvider.System);
 
     var app = builder.Build();
 

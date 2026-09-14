@@ -13,7 +13,13 @@ public sealed class SeedDataTests(SqlServerFixture sqlServer)
     {
         await using var dbContext = sqlServer.CreateDbContext();
 
-        var accounts = await dbContext.Accounts.OrderBy(a => a.Id).ToListAsync();
+        // Other integration tests add their own accounts to the shared
+        // database, so look at the seeded ids rather than the whole table.
+        var seededIds = SeedData.Accounts.Select(a => a.Id).ToArray();
+        var accounts = await dbContext.Accounts
+            .Where(a => seededIds.Contains(a.Id))
+            .OrderBy(a => a.Id)
+            .ToListAsync();
 
         accounts.Select(a => a.Code).Should().Equal("EQ-DESK-1", "EQ-DESK-2");
         accounts.Select(a => a.OwnerSubject).Should().OnlyHaveUniqueItems();
@@ -25,8 +31,14 @@ public sealed class SeedDataTests(SqlServerFixture sqlServer)
     {
         await using var dbContext = sqlServer.CreateDbContext();
 
-        var instruments = await dbContext.Instruments.OrderBy(i => i.Id).ToListAsync();
-        var prices = await dbContext.InstrumentPrices.ToListAsync();
+        var seededIds = SeedData.Instruments.Select(i => i.Id).ToArray();
+        var instruments = await dbContext.Instruments
+            .Where(i => seededIds.Contains(i.Id))
+            .OrderBy(i => i.Id)
+            .ToListAsync();
+        var prices = await dbContext.InstrumentPrices
+            .Where(p => seededIds.Contains(p.InstrumentId))
+            .ToListAsync();
 
         instruments.Select(i => i.Symbol).Should().Equal("AAPL", "MSFT", "TSLA", "NVDA");
         instruments.Should().OnlyContain(i => i.IsActive && i.InstrumentType == InstrumentType.Equity);
@@ -35,12 +47,13 @@ public sealed class SeedDataTests(SqlServerFixture sqlServer)
     }
 
     [Fact]
-    public async Task Trades_and_positions_start_empty()
+    public async Task Seeded_accounts_start_with_no_trades_or_positions()
     {
         await using var dbContext = sqlServer.CreateDbContext();
+        var seededIds = SeedData.Accounts.Select(a => a.Id).ToArray();
 
-        (await dbContext.Trades.AnyAsync()).Should().BeFalse();
-        (await dbContext.Positions.AnyAsync()).Should().BeFalse();
+        (await dbContext.Trades.AnyAsync(t => seededIds.Contains(t.AccountId))).Should().BeFalse();
+        (await dbContext.Positions.AnyAsync(p => seededIds.Contains(p.AccountId))).Should().BeFalse();
     }
 
     [Fact]
@@ -48,7 +61,7 @@ public sealed class SeedDataTests(SqlServerFixture sqlServer)
     {
         await using var dbContext = sqlServer.CreateDbContext();
 
-        var account = await dbContext.Accounts.FirstAsync();
+        var account = await dbContext.Accounts.SingleAsync(a => a.Id == SeedData.Accounts[0].Id);
 
         account.CreatedAtUtc.Kind.Should().Be(DateTimeKind.Utc);
         account.CreatedAtUtc.Should().Be(SeedData.SeededAtUtc);
