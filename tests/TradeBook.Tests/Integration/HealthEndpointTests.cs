@@ -8,7 +8,7 @@ namespace TradeBook.Tests.Integration;
 public sealed class HealthEndpointTests(SqlServerFixture sqlServer)
 {
     [Fact]
-    public async Task Health_returns_200_with_sqlserver_healthy_when_database_is_reachable()
+    public async Task Health_returns_200_with_database_healthy_when_database_is_reachable()
     {
         await using var factory = new TradeBookApiFactory(sqlServer.ConnectionString);
         using var client = factory.CreateClient();
@@ -21,14 +21,14 @@ public sealed class HealthEndpointTests(SqlServerFixture sqlServer)
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         body.RootElement.GetProperty("status").GetString().Should().Be("Healthy");
 
-        var sqlCheck = body.RootElement.GetProperty("checks").EnumerateArray()
-            .Should().ContainSingle(check => check.GetProperty("name").GetString() == "sqlserver")
+        var databaseCheck = body.RootElement.GetProperty("checks").EnumerateArray()
+            .Should().ContainSingle(check => check.GetProperty("name").GetString() == "database")
             .Subject;
-        sqlCheck.GetProperty("status").GetString().Should().Be("Healthy");
+        databaseCheck.GetProperty("status").GetString().Should().Be("Healthy");
     }
 
     [Fact]
-    public async Task Health_returns_503_with_sqlserver_unhealthy_when_database_is_unreachable()
+    public async Task Health_returns_503_with_database_unhealthy_when_database_is_unreachable()
     {
         // Port 1 has nothing listening. Short timeouts keep the test fast; the
         // 5 second health check timeout is the upper bound either way.

@@ -2,6 +2,7 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
 using TradeBook.Api.Infrastructure.Health;
+using TradeBook.Api.Persistence;
 
 // Two-stage Serilog initialisation. The bootstrap logger exists so that a
 // failure while building the host (bad configuration, missing connection
@@ -24,9 +25,18 @@ try
 
     builder.Services.AddControllers();
     builder.Services.AddProblemDetails();
+    builder.Services.AddTradeBookPersistence();
     builder.Services.AddTradeBookHealthChecks();
 
     var app = builder.Build();
+
+    if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+    {
+        // Opt-in. On for the compose stack and local development so a clean
+        // start produces a working schema; off where a pipeline owns the
+        // database (ADR-008).
+        await app.MigrateDatabaseAsync(app.Lifetime.ApplicationStopping);
+    }
 
     // Outermost so the one-line request summary reflects the final status code.
     app.UseSerilogRequestLogging(options => options.GetLevel = GetRequestLogLevel);
@@ -35,7 +45,7 @@ try
     app.MapControllers();
     app.MapTradeBookHealthChecks();
 
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {

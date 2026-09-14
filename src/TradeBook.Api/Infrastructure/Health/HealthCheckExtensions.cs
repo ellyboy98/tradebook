@@ -1,28 +1,20 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using TradeBook.Api.Persistence;
 
 namespace TradeBook.Api.Infrastructure.Health;
 
 public static class HealthCheckExtensions
 {
-    private const string ConnectionStringName = "TradeBook";
-
     public static IServiceCollection AddTradeBookHealthChecks(this IServiceCollection services)
     {
+        // Resolves a scoped TradeBookDbContext on every run and calls
+        // CanConnectAsync, which opens a connection to the TradeBook database
+        // itself. Unhealthy until migrations have created that database.
         services.AddHealthChecks()
-            .Add(new HealthCheckRegistration(
-                name: "sqlserver",
-                // The connection string is resolved when the check runs, not
-                // when it is registered. Reading configuration eagerly in
-                // Program.cs looks tidier but breaks the integration tests:
-                // WebApplicationFactory applies its overrides during
-                // builder.Build(), after Program.cs has already read the value.
-                factory: serviceProvider => new SqlServerHealthCheck(GetConnectionString(serviceProvider)),
-                failureStatus: HealthStatus.Unhealthy,
-                tags: null,
-                // Bound the probe. Without this a hung SQL Server makes the
-                // health endpoint hang for the full connection timeout.
-                timeout: TimeSpan.FromSeconds(5)));
+            .AddDbContextCheck<TradeBookDbContext>(
+                name: "database",
+                failureStatus: HealthStatus.Unhealthy);
 
         return services;
     }
@@ -40,13 +32,5 @@ public static class HealthCheckExtensions
             .AllowAnonymous();
 
         return endpoints;
-    }
-
-    private static string GetConnectionString(IServiceProvider serviceProvider)
-    {
-        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-
-        return configuration.GetConnectionString(ConnectionStringName)
-            ?? throw new InvalidOperationException($"Connection string '{ConnectionStringName}' is not configured.");
     }
 }

@@ -35,6 +35,9 @@ services:
       # Double underscore is how environment variables express the ':'
       # hierarchy of appsettings.json (ConnectionStrings:TradeBook).
       ConnectionStrings__TradeBook: "Server=sqlserver,1433;Database=TradeBook;User Id=sa;Password=${MSSQL_SA_PASSWORD:-TradeBook_Dev2026};Encrypt=True;TrustServerCertificate=True"
+      # The API creates the database and applies pending migrations when it
+      # starts (ADR-008), so a fresh volume produces a working schema.
+      Database__MigrateOnStartup: "true"
     ports:
       - "5000:8080"
     depends_on:

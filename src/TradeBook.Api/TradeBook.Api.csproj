@@ -5,8 +5,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- SQL Server connectivity for the health check. EF Core arrives in build step 2. -->
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.20" />
+    <!-- Design-time only: lets `dotnet ef` scaffold migrations against this project. Not shipped. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.20">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- AddDbContextCheck for the /health endpoint. -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.20" />
     <!-- Structured logging. Pulls in the console sink, compact JSON formatter and configuration binding. -->
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
   </ItemGroup>
