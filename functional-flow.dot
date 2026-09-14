@@ -1,0 +1,73 @@
+digraph TradeBookFlow {
+  graph [rankdir=TB, splines=polyline, nodesep=0.45, ranksep=0.65, bgcolor="white",
+         fontname="Helvetica", labelloc="t", fontsize=20, compound=true,
+         label=<<B>TradeBook &#8212; Functional Flow</B><BR/><FONT POINT-SIZE="12">Trade capture (write path) and continuous revaluation (push path)</FONT><BR/> >];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11,
+        fillcolor="#DEEBF7", color="#2E75B6", margin="0.18,0.10"];
+  edge [fontname="Helvetica", fontsize=9, color="#44546A", arrowsize=0.75];
+
+  subgraph cluster_auth {
+    label=<<B>A. Sign-on</B>>; fontsize=13; style="rounded,filled"; fillcolor="#F2F2F2"; color="#A6A6A6";
+    a1 [label="Trader opens blotter UI", shape=box, style="rounded,filled", fillcolor="#FFF2CC", color="#BF9000"];
+    a2 [label="Redirect to Keycloak\nauthorization endpoint", fillcolor="#E2F0D9", color="#548235"];
+    a3 [label="Keycloak authenticates and\nissues JWT access token", fillcolor="#E2F0D9", color="#548235"];
+    a4 [label="UI stores token; opens\nREST + SignalR connections", fillcolor="#FFF2CC", color="#BF9000"];
+    a1 -> a2 -> a3 -> a4;
+  }
+
+  subgraph cluster_capture {
+    label=<<B>B. Trade capture (write path)</B>>; fontsize=13; style="rounded,filled"; fillcolor="#F2F2F2"; color="#A6A6A6";
+    b1 [label="Trader submits execution\nPOST /api/trades", fillcolor="#FFF2CC", color="#BF9000"];
+    b2 [label="API validates JWT signature,\nissuer and audience"];
+    b3 [label="Caller owns\nthe account?", shape=diamond, style=filled, fillcolor="#FBE5D6", color="#C55A11", fontsize=10];
+    b4 [label="Return 403 Forbidden", shape=box, style="rounded,filled", fillcolor="#FFD9D9", color="#C00000"];
+    b5 [label="Payload valid?", shape=diamond, style=filled, fillcolor="#FBE5D6", color="#C55A11", fontsize=10];
+    b6 [label="Return 400 Bad Request", shape=box, style="rounded,filled", fillcolor="#FFD9D9", color="#C00000"];
+    b7 [label="Begin transaction; load position\nfor (account, instrument) with row_version"];
+    b8 [label="Apply weighted-average-cost rules\nsame side / reducing / crossing zero"];
+    b9 [label="Insert trade (append-only) and\nupdate position in one commit", fillcolor="#D9E2F3", color="#1F4E79"];
+    b10 [label="row_version\nconflict?", shape=diamond, style=filled, fillcolor="#FBE5D6", color="#C55A11", fontsize=10];
+    b11 [label="Reload position and retry\n(max 3 attempts)"];
+    b12 [label="Return 409 Conflict", shape=box, style="rounded,filled", fillcolor="#FFD9D9", color="#C00000"];
+    b13 [label="Publish updated position to\nSignalR group account-{id}"];
+    b14 [label="Return 201 Created\nwith trade and position", fillcolor="#FFF2CC", color="#BF9000"];
+
+    b1 -> b2 -> b3;
+    b3 -> b4  [label="no"];
+    b3 -> b5  [label="yes"];
+    b5 -> b6  [label="invalid"];
+    b5 -> b7  [label="valid"];
+    b7 -> b8 -> b9 -> b10;
+    b10 -> b11 [label="yes"];
+    b11 -> b7  [label="retry", style=dashed, constraint=false];
+    b11 -> b12 [label="attempts\nexhausted"];
+    b10 -> b13 [label="no"];
+    b13 -> b14;
+  }
+
+  subgraph cluster_price {
+    label=<<B>C. Continuous revaluation (push path)</B>>; fontsize=13; style="rounded,filled"; fillcolor="#F2F2F2"; color="#A6A6A6";
+    c1 [label="PriceFeedService timer fires\n(1 second interval)", fillcolor="#E2EFDA", color="#548235"];
+    c2 [label="Generate next price per active\ninstrument; persist snapshot", fillcolor="#E2EFDA", color="#548235"];
+    c3 [label="Load open positions\n(net_quantity <> 0)"];
+    c4 [label="Compute unrealised P&amp;L\n(last_price - average_cost) x net_quantity"];
+    c5 [label="Push valuation to subscribed\nSignalR groups", fillcolor="#E2EFDA", color="#548235"];
+    c6 [label="Blotter updates in place;\nno page refresh", fillcolor="#FFF2CC", color="#BF9000"];
+    c7 [label="Trade-driven position updates\narrive on the same hub connection", shape=note, style=filled, fillcolor="#FFFFFF", color="#A6A6A6", fontsize=9];
+    c6 -> c7 [style=dotted, arrowhead=none];
+    c1 -> c2; c2 -> c3; c3 -> c4; c4 -> c5; c5 -> c6;
+  }
+
+  a4 -> b1 [ltail=cluster_auth, lhead=cluster_capture, label="authenticated session", style=dashed];
+
+  legend [shape=plaintext, style="", fillcolor="white", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="4" CELLPADDING="3" COLOR="#A6A6A6">
+      <TR><TD COLSPAN="2" ALIGN="LEFT"><B>Actor</B></TD></TR>
+      <TR><TD BGCOLOR="#FFF2CC" WIDTH="18"></TD><TD ALIGN="LEFT">Trader / browser</TD></TR>
+      <TR><TD BGCOLOR="#DEEBF7" WIDTH="18"></TD><TD ALIGN="LEFT">TradeBook API</TD></TR>
+      <TR><TD BGCOLOR="#E2F0D9" WIDTH="18"></TD><TD ALIGN="LEFT">Keycloak / background services</TD></TR>
+      <TR><TD BGCOLOR="#D9E2F3" WIDTH="18"></TD><TD ALIGN="LEFT">SQL Server</TD></TR>
+      <TR><TD BGCOLOR="#FBE5D6" WIDTH="18"></TD><TD ALIGN="LEFT">Decision</TD></TR>
+      <TR><TD BGCOLOR="#FFD9D9" WIDTH="18"></TD><TD ALIGN="LEFT">Error response</TD></TR>
+    </TABLE>>];
+}

@@ -1,0 +1,67 @@
+digraph TradeBookFlowBusiness {
+  graph [rankdir=TB, splines=polyline, nodesep=0.45, ranksep=0.65, bgcolor="white",
+         fontname="Helvetica", labelloc="t", fontsize=20,
+         label=<<B>TradeBook &#8212; Trade Capture and Valuation Cycle</B><BR/><FONT POINT-SIZE="12">Overall business process flow</FONT><BR/> >];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11,
+        fillcolor="#DEEBF7", color="#2E75B6", margin="0.18,0.10"];
+  edge [fontname="Helvetica", fontsize=9, color="#44546A", arrowsize=0.75];
+
+  subgraph cluster_auth {
+    label=<<B>A. Sign-on</B>>; fontsize=13; style="rounded,filled"; fillcolor="#F2F2F2"; color="#A6A6A6";
+    a1 [label="Trader opens the blotter", fillcolor="#FFF2CC", color="#BF9000"];
+    a2 [label="Identity provider verifies\nthe trader and their role", fillcolor="#E2F0D9", color="#548235"];
+    a3 [label="Trader is signed in and\nthe blotter opens", fillcolor="#FFF2CC", color="#BF9000"];
+    a1 -> a2 -> a3;
+  }
+
+  subgraph cluster_capture {
+    label=<<B>B. Trade capture</B>>; fontsize=13; style="rounded,filled"; fillcolor="#F2F2F2"; color="#A6A6A6";
+    b1 [label="Trader submits an execution:\naccount, instrument, direction,\nquantity, price, execution time", fillcolor="#FFF2CC", color="#BF9000"];
+    b3 [label="Is the trader entitled\nto the account?", shape=diamond, style=filled, fillcolor="#FBE5D6", color="#C55A11", fontsize=10];
+    b4 [label="Refuse the execution", shape=box, style="rounded,filled", fillcolor="#FFD9D9", color="#C00000"];
+    b5 [label="Is the execution valid?", shape=diamond, style=filled, fillcolor="#FBE5D6", color="#C55A11", fontsize=10];
+    b6 [label="Refuse and name the\nfield at fault", shape=box, style="rounded,filled", fillcolor="#FFD9D9", color="#C00000"];
+    b7 [label="Record the execution permanently"];
+    b8 [label="Recalculate the holding on a\nweighted-average basis"];
+    b10 [label="Was the holding changed\nat the same moment?", shape=diamond, style=filled, fillcolor="#FBE5D6", color="#C55A11", fontsize=10];
+    b11 [label="Recalculate against the\nlater holding"];
+    b12 [label="Refuse; the trader\nmay resubmit", shape=box, style="rounded,filled", fillcolor="#FFD9D9", color="#C00000"];
+    b13 [label="Publish the revised holding to\nevery screen watching the account"];
+    b14 [label="Confirm the execution and\nholding to the trader", fillcolor="#FFF2CC", color="#BF9000"];
+
+    b1 -> b3;
+    b3 -> b4  [label="no"];
+    b3 -> b5  [label="yes"];
+    b5 -> b6  [label="no"];
+    b5 -> b7  [label="yes"];
+    b7 -> b8 -> b10;
+    b10 -> b11 [label="yes"];
+    b11 -> b8  [label="retry", style=dashed, constraint=false];
+    b11 -> b12 [label="after three\nattempts"];
+    b10 -> b13 [label="no"];
+    b13 -> b14;
+  }
+
+  subgraph cluster_price {
+    label=<<B>C. Continuous valuation</B>>; fontsize=13; style="rounded,filled"; fillcolor="#F2F2F2"; color="#A6A6A6";
+    c1 [label="Prices refresh at a\nregular interval", fillcolor="#E2F0D9", color="#548235"];
+    c2 [label="Retain the latest price for\neach active instrument", fillcolor="#E2F0D9", color="#548235"];
+    c3 [label="Select every holding with a\nnon-nil quantity"];
+    c4 [label="Recalculate unrealised profit\nagainst the latest price"];
+    c5 [label="Push the revised valuation to\nthe screens watching the account"];
+    c6 [label="Figures change in place;\nno refresh by the trader", fillcolor="#FFF2CC", color="#BF9000"];
+    c1 -> c2; c2 -> c3; c3 -> c4; c4 -> c5; c5 -> c6;
+  }
+
+  a3 -> b1 [label="signed in", style=dashed];
+
+  legend [shape=plaintext, style="", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="4" CELLPADDING="3" COLOR="#A6A6A6">
+      <TR><TD COLSPAN="2" ALIGN="LEFT"><B>Actor</B></TD></TR>
+      <TR><TD BGCOLOR="#FFF2CC" WIDTH="18"></TD><TD ALIGN="LEFT">Trader</TD></TR>
+      <TR><TD BGCOLOR="#DEEBF7" WIDTH="18"></TD><TD ALIGN="LEFT">TradeBook</TD></TR>
+      <TR><TD BGCOLOR="#E2F0D9" WIDTH="18"></TD><TD ALIGN="LEFT">Identity provider / price feed</TD></TR>
+      <TR><TD BGCOLOR="#FBE5D6" WIDTH="18"></TD><TD ALIGN="LEFT">Decision</TD></TR>
+      <TR><TD BGCOLOR="#FFD9D9" WIDTH="18"></TD><TD ALIGN="LEFT">Refusal</TD></TR>
+    </TABLE>>];
+}

@@ -1,0 +1,76 @@
+digraph TradeBookERD {
+  graph [rankdir=LR, splines=true, nodesep=0.7, ranksep=1.6, bgcolor="white",
+         fontname="Helvetica", labelloc="t", fontsize=20,
+         label=<<B>TradeBook &#8212; Entity Relationship Diagram</B><BR/><FONT POINT-SIZE="12">Equities, single currency, weighted-average cost</FONT><BR/> >];
+  node  [shape=plaintext, fontname="Helvetica", fontsize=11];
+  edge  [fontname="Helvetica", fontsize=10, color="#44546A", arrowsize=0.8];
+
+  accounts [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">
+      <TR><TD BGCOLOR="#1F4E79" COLSPAN="3"><FONT COLOR="white"><B>accounts</B></FONT></TD></TR>
+      <TR><TD ALIGN="LEFT"><B>PK</B></TD><TD ALIGN="LEFT">id</TD><TD ALIGN="LEFT">int identity</TD></TR>
+      <TR><TD ALIGN="LEFT">UQ</TD><TD ALIGN="LEFT">code</TD><TD ALIGN="LEFT">nvarchar(16)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">name</TD><TD ALIGN="LEFT">nvarchar(128)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">base_currency</TD><TD ALIGN="LEFT">char(3)</TD></TR>
+      <TR><TD ALIGN="LEFT">IX</TD><TD ALIGN="LEFT">owner_subject</TD><TD ALIGN="LEFT">nvarchar(64)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">is_active</TD><TD ALIGN="LEFT">bit</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">created_at_utc</TD><TD ALIGN="LEFT">datetime2(3)</TD></TR>
+    </TABLE>>];
+
+  instruments [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">
+      <TR><TD BGCOLOR="#1F4E79" COLSPAN="3"><FONT COLOR="white"><B>instruments</B></FONT></TD></TR>
+      <TR><TD ALIGN="LEFT"><B>PK</B></TD><TD ALIGN="LEFT">id</TD><TD ALIGN="LEFT">int identity</TD></TR>
+      <TR><TD ALIGN="LEFT">UQ</TD><TD ALIGN="LEFT">symbol</TD><TD ALIGN="LEFT">nvarchar(16)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">name</TD><TD ALIGN="LEFT">nvarchar(128)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">instrument_type</TD><TD ALIGN="LEFT">tinyint</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">currency</TD><TD ALIGN="LEFT">char(3)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">tick_size</TD><TD ALIGN="LEFT">decimal(18,6)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">lot_size</TD><TD ALIGN="LEFT">int</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">is_active</TD><TD ALIGN="LEFT">bit</TD></TR>
+    </TABLE>>];
+
+  trades [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">
+      <TR><TD BGCOLOR="#2E75B6" COLSPAN="3"><FONT COLOR="white"><B>trades</B> &#160;(append-only)</FONT></TD></TR>
+      <TR><TD ALIGN="LEFT"><B>PK</B></TD><TD ALIGN="LEFT">id</TD><TD ALIGN="LEFT">bigint identity</TD></TR>
+      <TR><TD ALIGN="LEFT"><B>FK</B></TD><TD ALIGN="LEFT">account_id</TD><TD ALIGN="LEFT">int</TD></TR>
+      <TR><TD ALIGN="LEFT"><B>FK</B></TD><TD ALIGN="LEFT">instrument_id</TD><TD ALIGN="LEFT">int</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">side</TD><TD ALIGN="LEFT">tinyint (1=Buy 2=Sell)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">quantity</TD><TD ALIGN="LEFT">decimal(18,4)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">price</TD><TD ALIGN="LEFT">decimal(18,6)</TD></TR>
+      <TR><TD ALIGN="LEFT">IX</TD><TD ALIGN="LEFT">executed_at_utc</TD><TD ALIGN="LEFT">datetime2(3)</TD></TR>
+      <TR><TD ALIGN="LEFT">UQ</TD><TD ALIGN="LEFT">external_ref</TD><TD ALIGN="LEFT">nvarchar(64) null</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">captured_by_subject</TD><TD ALIGN="LEFT">nvarchar(64)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">captured_at_utc</TD><TD ALIGN="LEFT">datetime2(3)</TD></TR>
+    </TABLE>>];
+
+  positions [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">
+      <TR><TD BGCOLOR="#2E75B6" COLSPAN="3"><FONT COLOR="white"><B>positions</B> &#160;(derived)</FONT></TD></TR>
+      <TR><TD ALIGN="LEFT"><B>PK</B></TD><TD ALIGN="LEFT">id</TD><TD ALIGN="LEFT">int identity</TD></TR>
+      <TR><TD ALIGN="LEFT"><B>FK</B> UQ</TD><TD ALIGN="LEFT">account_id</TD><TD ALIGN="LEFT">int</TD></TR>
+      <TR><TD ALIGN="LEFT"><B>FK</B> UQ</TD><TD ALIGN="LEFT">instrument_id</TD><TD ALIGN="LEFT">int</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">net_quantity</TD><TD ALIGN="LEFT">decimal(18,4)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">average_cost</TD><TD ALIGN="LEFT">decimal(18,6)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">realised_pnl</TD><TD ALIGN="LEFT">decimal(18,6)</TD></TR>
+      <TR><TD ALIGN="LEFT"><B>FK</B></TD><TD ALIGN="LEFT">last_trade_id</TD><TD ALIGN="LEFT">bigint null</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">updated_at_utc</TD><TD ALIGN="LEFT">datetime2(3)</TD></TR>
+      <TR><TD ALIGN="LEFT">CC</TD><TD ALIGN="LEFT">row_version</TD><TD ALIGN="LEFT">rowversion</TD></TR>
+    </TABLE>>];
+
+  prices [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">
+      <TR><TD BGCOLOR="#548235" COLSPAN="3"><FONT COLOR="white"><B>instrument_prices</B></FONT></TD></TR>
+      <TR><TD ALIGN="LEFT"><B>PK</B> <B>FK</B></TD><TD ALIGN="LEFT">instrument_id</TD><TD ALIGN="LEFT">int</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">last_price</TD><TD ALIGN="LEFT">decimal(18,6)</TD></TR>
+      <TR><TD ALIGN="LEFT"></TD><TD ALIGN="LEFT">as_of_utc</TD><TD ALIGN="LEFT">datetime2(3)</TD></TR>
+    </TABLE>>];
+
+  accounts    -> trades    [taillabel="1", headlabel="0..*", labeldistance=2.2, labelangle=18];
+  instruments -> trades    [taillabel="1", headlabel="0..*", labeldistance=2.2, labelangle=18];
+  accounts    -> positions [taillabel="1", headlabel="0..*", labeldistance=2.2, labelangle=-18];
+  instruments -> positions [taillabel="1", headlabel="0..*", labeldistance=2.2, labelangle=-18];
+  instruments -> prices    [taillabel="1", headlabel="0..1", labeldistance=2.2, labelangle=18];
+  trades      -> positions [taillabel="1", headlabel="0..1", style=dashed, label="last_trade_id", labeldistance=2.5];
+}

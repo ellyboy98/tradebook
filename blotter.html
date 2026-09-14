@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TradeBook — Blotter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --surface-0:#10131A; --surface-1:#171B24; --surface-2:#1F2430;
+  --line:#2C3340; --text:#E3E7EE; --text-dim:#8B94A5;
+  --gain:#3FB6A8; --loss:#D9544D; --accent:#C9A227;
+  --rail:200px; --ticket:320px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--surface-0); color:var(--text);
+  font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:13px; line-height:1.45;
+  font-variant-numeric:tabular-nums slashed-zero;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.num{font-variant-numeric:tabular-nums slashed-zero;text-align:right;font-weight:500;font-size:14px}
+.gain{color:var(--gain)} .loss{color:var(--loss)} .dim{color:var(--text-dim)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+
+/* connection bar */
+#conn{display:none;padding:6px 16px;font-size:12px;font-weight:500;
+  background:#3A2F16;color:#E9C960;border-bottom:1px solid var(--line)}
+#conn.live{background:#2A2614;color:var(--accent)}
+#conn.show{display:block}
+
+/* shell */
+#shell{flex:1;display:grid;grid-template-columns:var(--rail) 1fr var(--ticket);min-height:0}
+
+/* account rail */
+#rail{background:var(--surface-1);border-right:1px solid var(--line);padding:14px 0;overflow-y:auto}
+#rail h2{font-size:12px;font-weight:600;color:var(--text-dim);padding:0 14px 10px}
+.acct{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);
+  font:inherit;padding:8px 14px;cursor:pointer;border-left:2px solid transparent}
+.acct .code{font-weight:600}
+.acct .meta{font-size:12px;color:var(--text-dim)}
+.acct[aria-current="true"]{background:var(--surface-2);border-left-color:var(--accent)}
+
+/* main */
+#main{display:flex;flex-direction:column;min-width:0;min-height:0}
+header{display:flex;align-items:baseline;justify-content:space-between;
+  padding:16px 20px 12px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;font-weight:600}
+header .sub{font-size:12px;color:var(--text-dim);margin-top:2px}
+#total{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums slashed-zero}
+#totalLabel{font-size:12px;color:var(--text-dim);text-align:right}
+
+.panel{display:flex;flex-direction:column;min-height:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 20px 8px}
+.panel-head h2{font-size:15px;font-weight:600}
+.scroll{overflow-y:auto;min-height:0}
+#positionsPanel{flex:1 1 55%;border-bottom:1px solid var(--line)}
+#blotterPanel{flex:1 1 45%}
+
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;background:var(--surface-2);z-index:1;
+  font-size:12px;font-weight:600;color:var(--text-dim);text-align:left;
+  padding:7px 20px;border-bottom:1px solid var(--line);white-space:nowrap}
+thead th.r{text-align:right}
+tbody td{padding:0 20px;height:32px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr:hover td{background:var(--surface-2)}
+.sym{font-weight:600}
+
+/* tick flash */
+@keyframes flashUp{from{background:rgba(63,182,168,.28)}to{background:transparent}}
+@keyframes flashDn{from{background:rgba(217,84,77,.28)}to{background:transparent}}
+td.up{animation:flashUp .4s ease-out}
+td.dn{animation:flashDn .4s ease-out}
+.tri{display:none;font-size:10px;margin-right:4px}
+@media (prefers-reduced-motion: reduce){
+  td.up,td.dn{animation:none}
+  td.up .tri,td.dn .tri{display:inline}
+  td.up .tri::before{content:"\25B2";color:var(--gain)}
+  td.dn .tri::before{content:"\25BC";color:var(--loss)}
+}
+
+/* ticket */
+#ticket{background:var(--surface-1);border-left:1px solid var(--line);
+  padding:16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+#ticket h2{font-size:15px;font-weight:600}
+.acctOn{font-size:12px;color:var(--text-dim)}
+.acctOn b{color:var(--text);font-weight:600}
+label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:5px}
+input,select{width:100%;background:var(--surface-2);border:1px solid var(--line);
+  color:var(--text);font:inherit;font-size:14px;padding:8px 10px;border-radius:3px;
+  font-variant-numeric:tabular-nums slashed-zero}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.side{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.side button{background:var(--surface-2);border:1px solid var(--line);color:var(--text-dim);
+  font:inherit;font-size:14px;font-weight:600;padding:9px;border-radius:3px;cursor:pointer}
+.side button[aria-pressed="true"][data-side="Buy"]{background:var(--gain);border-color:var(--gain);color:#06231F}
+.side button[aria-pressed="true"][data-side="Sell"]{background:var(--loss);border-color:var(--loss);color:#2A0B09}
+#book{background:var(--accent);border:0;color:#1A1405;font:inherit;font-size:14px;
+  font-weight:700;padding:11px;border-radius:3px;cursor:pointer;min-height:36px}
+#book:disabled{opacity:.45;cursor:not-allowed}
+#preview{font-size:12px;color:var(--text-dim);min-height:32px}
+#preview b{color:var(--text)}
+.err{color:var(--loss);font-size:12px;margin-top:5px;display:none}
+.err.show{display:block}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--surface-2);border:1px solid var(--accent);color:var(--text);
+  padding:9px 16px;border-radius:3px;font-size:13px;font-weight:500;
+  opacity:0;pointer-events:none;transition:opacity .18s}
+#toast.show{opacity:1}
+
+@media (max-width:1280px){ :root{--rail:0px} #rail{display:none} }
+@media (max-width:1024px){
+  #shell{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  #ticket{border-left:0;border-top:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+
+<div id="conn" role="status"></div>
+
+<div id="shell">
+
+  <nav id="rail" aria-label="Accounts">
+    <h2>Accounts</h2>
+    <button class="acct" data-acct="EQ-DESK-1" aria-current="true">
+      <span class="code">EQ-DESK-1</span><br><span class="meta">Equities Desk 1</span>
+    </button>
+    <button class="acct" data-acct="EQ-DESK-2">
+      <span class="code">EQ-DESK-2</span><br><span class="meta">Equities Desk 2</span>
+    </button>
+    <button class="acct" data-acct="PROP-A">
+      <span class="code">PROP-A</span><br><span class="meta">Proprietary A</span>
+    </button>
+  </nav>
+
+  <main id="main">
+    <header>
+      <div>
+        <h1 id="acctName">Equities Desk 1</h1>
+        <div class="sub" id="acctCode">EQ-DESK-1 · USD</div>
+      </div>
+      <div>
+        <div id="total" class="num">+0.00</div>
+        <div id="totalLabel">Unrealised P&amp;L</div>
+      </div>
+    </header>
+
+    <section class="panel" id="positionsPanel" aria-labelledby="posH">
+      <div class="panel-head"><h2 id="posH">Positions</h2>
+        <span class="dim" style="font-size:12px">Prices update every second</span></div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th scope="col">Symbol</th><th scope="col">Direction</th>
+            <th scope="col" class="r">Net quantity</th><th scope="col" class="r">Average cost</th>
+            <th scope="col" class="r">Last price</th><th scope="col" class="r">Unrealised</th>
+            <th scope="col" class="r">Realised</th>
+          </tr></thead>
+          <tbody id="posBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="blotterPanel" aria-labelledby="blotH">
+      <div class="panel-head"><h2 id="blotH">Blotter</h2>
+        <span class="dim" style="font-size:12px">Today</span></div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th scope="col">Time</th><th scope="col">Symbol</th><th scope="col">Side</th>
+            <th scope="col" class="r">Quantity</th><th scope="col" class="r">Price</th>
+            <th scope="col">Reference</th>
+          </tr></thead>
+          <tbody id="blotBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <aside id="ticket" aria-labelledby="tktH">
+    <h2 id="tktH">New trade</h2>
+    <div class="acctOn">Booking to <b id="tktAcct">EQ-DESK-1</b></div>
+
+    <div>
+      <label for="inst">Instrument</label>
+      <select id="inst"></select>
+    </div>
+
+    <div>
+      <span class="dim" style="font-size:12px;font-weight:600;display:block;margin-bottom:5px">Side</span>
+      <div class="side" role="group" aria-label="Side">
+        <button type="button" data-side="Buy" aria-pressed="true">Buy</button>
+        <button type="button" data-side="Sell" aria-pressed="false">Sell</button>
+      </div>
+    </div>
+
+    <div>
+      <label for="qty">Quantity</label>
+      <input id="qty" type="number" min="1" step="1" value="100">
+      <div class="err" id="qtyErr">Quantity must be greater than zero.</div>
+    </div>
+
+    <div>
+      <label for="px">Price</label>
+      <input id="px" type="number" min="0" step="0.01">
+      <div class="err" id="pxErr">Price must be greater than zero.</div>
+    </div>
+
+    <div id="preview"></div>
+    <button id="book">Book trade</button>
+  </aside>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+const INSTRUMENTS=[
+  {sym:'AAPL',name:'Apple Inc.',px:11.02},
+  {sym:'MSFT',name:'Microsoft Corp.',px:8.50},
+  {sym:'TSLA',name:'Tesla Inc.',px:42.10},
+  {sym:'NVDA',name:'NVIDIA Corp.',px:27.35}
+];
+const ACCOUNTS={
+  'EQ-DESK-1':{name:'Equities Desk 1',
+    pos:[{sym:'AAPL',net:500,avg:10.80,rlsd:220.00},
+         {sym:'MSFT',net:-200,avg:9.00,rlsd:-500.00},
+         {sym:'TSLA',net:0,avg:0,rlsd:80.00}],
+    trades:[['09:31:04','AAPL','Buy',300,10.00,'OMS-88211'],
+            ['09:48:22','AAPL','Buy',200,12.00,'OMS-88212'],
+            ['10:02:51','AAPL','Sell',100,13.00,'OMS-88213'],
+            ['10:14:09','MSFT','Sell',200,9.00,'OMS-88219']]},
+  'EQ-DESK-2':{name:'Equities Desk 2',
+    pos:[{sym:'NVDA',net:1200,avg:26.40,rlsd:0}],
+    trades:[['09:05:12','NVDA','Buy',1200,26.40,'OMS-88190']]},
+  'PROP-A':{name:'Proprietary A',pos:[],trades:[]}
+};
+
+let current='EQ-DESK-1', side='Buy';
+const prices={}; INSTRUMENTS.forEach(i=>prices[i.sym]=i.px);
+const prev={};
+const fmt=(n,d=2)=>(n<0?'\u2212':'+')+Math.abs(n).toFixed(d);
+const plain=(n,d=2)=>n.toFixed(d);
+const $=id=>document.getElementById(id);
+
+function unrl(p){ return p.net===0?0:(prices[p.sym]-p.avg)*p.net; }
+
+function renderPositions(){
+  const a=ACCOUNTS[current], body=$('posBody');
+  if(!a.pos.length){
+    body.innerHTML='<tr><td colspan="7" class="dim" style="padding:18px 20px">No positions in this account. Book a trade to open one.</td></tr>';
+    $('total').textContent='+0.00'; $('total').className='num'; return;
+  }
+  let total=0;
+  body.innerHTML=a.pos.map(p=>{
+    const u=unrl(p); total+=u;
+    const dir=p.net>0?'Long':p.net<0?'Short':'Flat';
+    const dirCls=p.net>0?'gain':p.net<0?'loss':'dim';
+    const px=prices[p.sym];
+    return `<tr data-sym="${p.sym}">
+      <td class="sym">${p.sym}</td>
+      <td class="${dirCls}">${dir}</td>
+      <td class="num">${p.net===0?'0':fmt(p.net,0)}</td>
+      <td class="num">${p.net===0?'\u2014':plain(p.avg,4)}</td>
+      <td class="num" data-cell="px"><span class="tri"></span>${plain(px,2)}</td>
+      <td class="num ${p.net===0?'dim':(u>=0?'gain':'loss')}" data-cell="unrl"><span class="tri"></span>${p.net===0?'\u2014':fmt(u)}</td>
+      <td class="num ${p.rlsd>=0?'gain':'loss'}">${fmt(p.rlsd)}</td>
+    </tr>`;}).join('');
+  const t=$('total');
+  t.textContent=fmt(total); t.className='num '+(total>=0?'gain':'loss');
+}
+
+function renderBlotter(){
+  const a=ACCOUNTS[current];
+  $('blotBody').innerHTML = a.trades.length
+    ? a.trades.slice().reverse().map(t=>`<tr>
+        <td class="dim">${t[0]}</td><td class="sym">${t[1]}</td>
+        <td class="${t[2]==='Buy'?'gain':'loss'}">${t[2]}</td>
+        <td class="num">${t[3]}</td><td class="num">${plain(t[4],2)}</td>
+        <td class="dim">${t[5]}</td></tr>`).join('')
+    : '<tr><td colspan="6" class="dim" style="padding:18px 20px">No trades captured today.</td></tr>';
+}
+
+function tick(){
+  const a=ACCOUNTS[current];
+  INSTRUMENTS.forEach(i=>{
+    const drift=(Math.random()-0.5)*0.06*i.px;
+    prices[i.sym]=Math.max(0.01, prices[i.sym]+drift);
+  });
+  a.pos.forEach(p=>{
+    const row=document.querySelector(`#posBody tr[data-sym="${p.sym}"]`);
+    if(!row) return;
+    const pxCell=row.querySelector('[data-cell="px"]');
+    const uCell=row.querySelector('[data-cell="unrl"]');
+    const np=prices[p.sym], op=prev[p.sym]??np;
+    flash(pxCell, np-op); pxCell.innerHTML='<span class="tri"></span>'+plain(np,2);
+    if(p.net!==0){
+      const u=unrl(p);
+      flash(uCell, np-op);
+      uCell.innerHTML='<span class="tri"></span>'+fmt(u);
+      uCell.className='num '+(u>=0?'gain':'loss');
+    }
+    prev[p.sym]=np;
+  });
+  let total=a.pos.reduce((s,p)=>s+unrl(p),0);
+  const t=$('total'); t.textContent=fmt(total); t.className='num '+(total>=0?'gain':'loss');
+}
+function flash(cell,delta){
+  if(!cell||delta===0) return;
+  cell.classList.remove('up','dn'); void cell.offsetWidth;
+  cell.classList.add(delta>0?'up':'dn');
+  setTimeout(()=>cell.classList.remove('up','dn'),420);
+}
+
+function renderPreview(){
+  const a=ACCOUNTS[current], sym=$('inst').value;
+  const q=parseFloat($('qty').value), px=parseFloat($('px').value);
+  if(!(q>0)||!(px>0)){ $('preview').textContent=''; return; }
+  const p=a.pos.find(x=>x.sym===sym)||{net:0,avg:0,rlsd:0};
+  const signed=side==='Buy'?q:-q;
+  let net=p.net, avg=p.avg;
+  if(net===0){ net=signed; avg=px; }
+  else if(Math.sign(net)===Math.sign(signed)){ avg=(Math.abs(net)*avg+q*px)/Math.abs(net+signed); net=net+signed; }
+  else if(q<=Math.abs(net)){ net=net+signed; if(net===0) avg=0; }
+  else { net=net+signed; avg=px; }
+  const dir=net>0?'long':net<0?'short':'flat';
+  $('preview').innerHTML = net===0
+    ? 'Position becomes <b>flat</b>.'
+    : `Position becomes <b>${Math.abs(net)} ${dir}</b> at <b>${plain(avg,4)}</b>.`;
+}
+
+function validate(){
+  const q=parseFloat($('qty').value), px=parseFloat($('px').value);
+  $('qtyErr').classList.toggle('show', $('qty').dataset.touched==='1' && !(q>0));
+  $('pxErr').classList.toggle('show', $('px').dataset.touched==='1' && !(px>0));
+  $('book').disabled = !(q>0 && px>0);
+}
+
+function book(){
+  const a=ACCOUNTS[current], sym=$('inst').value;
+  const q=parseFloat($('qty').value), px=parseFloat($('px').value);
+  let p=a.pos.find(x=>x.sym===sym);
+  if(!p){ p={sym,net:0,avg:0,rlsd:0}; a.pos.push(p); }
+  const signed=side==='Buy'?q:-q;
+  if(p.net===0){ p.net=signed; p.avg=px; }
+  else if(Math.sign(p.net)===Math.sign(signed)){
+    p.avg=(Math.abs(p.net)*p.avg+q*px)/Math.abs(p.net+signed); p.net+=signed; }
+  else if(q<=Math.abs(p.net)){
+    p.rlsd+=q*(px-p.avg)*Math.sign(p.net); p.net+=signed; if(p.net===0) p.avg=0; }
+  else {
+    p.rlsd+=Math.abs(p.net)*(px-p.avg)*Math.sign(p.net); p.net+=signed; p.avg=px; }
+  const now=new Date().toTimeString().slice(0,8);
+  a.trades.push([now,sym,side,q,px,'UI-'+Math.floor(Math.random()*90000+10000)]);
+  renderPositions(); renderBlotter();
+  const t=$('toast'); t.textContent='Trade booked'; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+// wiring
+$('inst').innerHTML=INSTRUMENTS.map(i=>`<option value="${i.sym}">${i.sym} — ${i.name}</option>`).join('');
+$('px').value=plain(prices[INSTRUMENTS[0].sym],2);
+document.querySelectorAll('.acct').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.acct').forEach(x=>x.setAttribute('aria-current','false'));
+  b.setAttribute('aria-current','true');
+  current=b.dataset.acct;
+  $('acctName').textContent=ACCOUNTS[current].name;
+  $('acctCode').textContent=current+' · USD';
+  $('tktAcct').textContent=current;
+  renderPositions(); renderBlotter(); renderPreview();
+}));
+document.querySelectorAll('.side button').forEach(b=>b.addEventListener('click',()=>{
+  side=b.dataset.side;
+  document.querySelectorAll('.side button').forEach(x=>
+    x.setAttribute('aria-pressed', String(x.dataset.side===side)));
+  renderPreview();
+}));
+['qty','px'].forEach(id=>{
+  $(id).addEventListener('input',()=>{renderPreview();validate();});
+  $(id).addEventListener('blur',()=>{$(id).dataset.touched='1';validate();});
+});
+$('inst').addEventListener('change',()=>{
+  $('px').value=plain(prices[$('inst').value],2); renderPreview();
+});
+$('book').addEventListener('click',book);
+document.getElementById('posBody').addEventListener('click',e=>{
+  const tr=e.target.closest('tr[data-sym]'); if(!tr) return;
+  $('inst').value=tr.dataset.sym; $('px').value=plain(prices[tr.dataset.sym],2); renderPreview();
+});
+
+renderPositions(); renderBlotter(); renderPreview(); validate();
+INSTRUMENTS.forEach(i=>prev[i.sym]=prices[i.sym]);
+setInterval(tick,1000);
+
+// demo: connection bar behaviour
+setTimeout(()=>{
+  const c=$('conn'); c.textContent='Live prices disconnected. Reconnecting.'; c.classList.add('show');
+  setTimeout(()=>{c.textContent='Prices live';c.classList.add('live');
+    setTimeout(()=>c.classList.remove('show','live'),2000);},2600);
+},15000);
+</script>
+</body>
+</html>
