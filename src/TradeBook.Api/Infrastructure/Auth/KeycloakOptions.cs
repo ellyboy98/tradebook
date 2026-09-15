@@ -35,4 +35,8 @@ public sealed class KeycloakOptions
 
     /// <summary>False only for local development, where Keycloak runs on plain HTTP.</summary>
     public bool RequireHttpsMetadata { get; init; } = true;
+
+    /// <summary>The public client the browser page signs in as (keycloak/realm-export.json).</summary>
+    [Required]
+    public string WebClientId { get; init; } = "tradebook-web";
 }

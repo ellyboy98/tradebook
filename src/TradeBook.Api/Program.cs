@@ -2,6 +2,8 @@ using System.Text.Json.Serialization;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using TradeBook.Api.Features.Accounts;
+using TradeBook.Api.Features.Instruments;
 using TradeBook.Api.Features.Positions;
 using TradeBook.Api.Features.PriceFeed;
 using TradeBook.Api.Features.TradeCapture;
@@ -48,6 +50,10 @@ try
     builder.Services.AddScoped<CaptureTradeHandler>();
     builder.Services.AddScoped<BlotterHandler>();
     builder.Services.AddScoped<GetPositionsHandler>();
+    builder.Services.AddScoped<ListInstrumentsHandler>();
+    builder.Services.AddScoped<CreateInstrumentHandler>();
+    builder.Services.AddScoped<ListAccountsHandler>();
+    builder.Services.AddScoped<CreateAccountHandler>();
 
     // The clock is injected so "not in the future" can be tested without
     // waiting, and so the audit timestamps come from one source.
@@ -69,6 +75,14 @@ try
     // Gives the empty 401 and 403 responses from authentication and
     // authorisation a problem-details body, like every other error.
     app.UseStatusCodePages();
+
+    // The blotter page and its script, served from wwwroot. Placed before
+    // authentication on purpose: these are middleware, not endpoints, so the
+    // fallback "must be signed in" policy does not apply to them, and the page
+    // has to load before anyone can sign in. (MapStaticAssets would make them
+    // endpoints and the fallback policy would then block index.html.)
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
 
     app.UseAuthentication();
     app.UseAuthorization();

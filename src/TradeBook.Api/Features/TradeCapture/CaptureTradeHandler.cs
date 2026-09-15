@@ -94,7 +94,9 @@ public sealed class CaptureTradeHandler(
         // Payload rules (design.md section 3, B.4). All of them are checked so
         // the caller sees every problem at once, each under its field name.
         var now = timeProvider.GetUtcNowToMilliseconds();
-        var errors = Validate(request, account, instrument, now);
+        // No execution time supplied means "now", from the server's clock.
+        var executedAtUtc = request.ExecutedAtUtc?.UtcDateTime ?? now;
+        var errors = Validate(request, account, instrument, executedAtUtc, now);
         if (errors.Count > 0)
         {
             return new CaptureTradeResult.Invalid(errors);
@@ -120,7 +122,7 @@ public sealed class CaptureTradeHandler(
             Side = request.Side,
             Quantity = request.Quantity,
             Price = request.Price,
-            ExecutedAtUtc = request.ExecutedAtUtc.UtcDateTime,
+            ExecutedAtUtc = executedAtUtc,
             ExternalRef = request.ExternalRef,
             CapturedBySubject = caller.Subject,
             CapturedAtUtc = now,
@@ -234,6 +236,7 @@ public sealed class CaptureTradeHandler(
         CaptureTradeRequest request,
         Account account,
         Instrument instrument,
+        DateTime executedAtUtc,
         DateTime now)
     {
         // Keys are the JSON property names so they line up with what the
@@ -260,7 +263,7 @@ public sealed class CaptureTradeHandler(
             errors["price"] = ["Price must be greater than zero."];
         }
 
-        if (request.ExecutedAtUtc.UtcDateTime > now)
+        if (executedAtUtc > now)
         {
             errors["executedAtUtc"] = ["Execution time must not be in the future."];
         }

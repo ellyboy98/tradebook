@@ -224,6 +224,19 @@ public sealed class TradeCaptureTests(SqlServerFixture sqlServer) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task Omitting_the_execution_time_books_at_the_server_clock()
+    {
+        var accountId = await sqlServer.CreateAccountAsync();
+
+        var (response, body) = await _client.PostTradeAsync(new { accountId, instrumentId = Aapl, side = "Buy", quantity = 10m, price = 10m });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var executedAt = DateTime.Parse(body.GetProperty("trade").GetProperty("executedAtUtc").GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind);
+        executedAt.Kind.Should().Be(DateTimeKind.Utc);
+        executedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
     public async Task Rejects_a_body_with_a_missing_field()
     {
         var accountId = await sqlServer.CreateAccountAsync();
