@@ -1,10 +1,11 @@
 name: tradebook
 
-# Build step 1: SQL Server and the API only. Keycloak joins in step 7.
+# SQL Server, Keycloak (dev mode, realm imported from keycloak/realm-export.json)
+# and the API. The API waits for both to report healthy.
 #
-# The SA password is a development credential. Override it with
-# MSSQL_SA_PASSWORD in the environment or a .env file if you want a different
-# one; the default keeps `docker compose up` working with zero setup.
+# Every password here is a development credential. Override them with
+# MSSQL_SA_PASSWORD / KEYCLOAK_ADMIN_PASSWORD in the environment or a .env
+# file; the defaults keep `docker compose up` working with zero setup.
 
 services:
   sqlserver:
@@ -26,6 +27,29 @@ services:
       retries: 10
       start_period: 20s
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7
+    # start-dev: HTTP, no hostname checks, embedded database. --import-realm
+    # loads keycloak/realm-export.json on first start. No volume, so every
+    # fresh container re-imports the realm and the demo users.
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Exposes /health/* on the management port (9000) for the healthcheck.
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    healthcheck:
+      # The image has no curl, but bash can open a TCP socket itself.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
   api:
     build:
       context: .
@@ -38,10 +62,18 @@ services:
       # The API creates the database and applies pending migrations when it
       # starts (ADR-008), so a fresh volume produces a working schema.
       Database__MigrateOnStartup: "true"
+      # Metadata and signing keys are fetched over the compose network, but
+      # tokens are issued to the browser at localhost:8080, so the issuer the
+      # API accepts is the public URL. See KeycloakOptions.
+      Keycloak__Authority: http://keycloak:8080/realms/tradebook
+      Keycloak__Issuer: http://localhost:8080/realms/tradebook
+      Keycloak__RequireHttpsMetadata: "false"
     ports:
       - "5000:8080"
     depends_on:
       sqlserver:
+        condition: service_healthy
+      keycloak:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]

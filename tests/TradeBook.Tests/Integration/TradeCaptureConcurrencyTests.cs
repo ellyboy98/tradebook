@@ -38,7 +38,7 @@ public sealed class TradeCaptureConcurrencyTests(SqlServerFixture sqlServer)
         await using var factory = new TradeBookApiFactory(
             sqlServer.ConnectionString,
             services => services.AddSingleton<IInterceptor>(interceptor));
-        using var client = factory.CreateClient();
+        using var client = factory.CreateOpsClient();
 
         // Buying at the current average cost and selling above it gives the
         // same final state whichever request commits first, so the assertion
@@ -70,7 +70,7 @@ public sealed class TradeCaptureConcurrencyTests(SqlServerFixture sqlServer)
         await using var factory = new TradeBookApiFactory(
             sqlServer.ConnectionString,
             services => services.AddSingleton<IInterceptor>(interceptor));
-        using var client = factory.CreateClient();
+        using var client = factory.CreateOpsClient();
 
         var (response, body) = await client.PostTradeAsync(Trade(accountId, "Buy", 300m, 10.00m));
 
@@ -92,7 +92,7 @@ public sealed class TradeCaptureConcurrencyTests(SqlServerFixture sqlServer)
     private async Task OpenPositionAsync(int accountId)
     {
         await using var factory = new TradeBookApiFactory(sqlServer.ConnectionString);
-        using var client = factory.CreateClient();
+        using var client = factory.CreateOpsClient();
 
         var (response, _) = await client.PostTradeAsync(Trade(accountId, "Buy", 100m, 10.00m));
 

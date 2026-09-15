@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TradeBook.Api.Domain;
+using TradeBook.Api.Infrastructure.Auth;
 using TradeBook.Api.Persistence;
 using TradeBook.Api.Persistence.Entities;
 
@@ -20,11 +21,29 @@ public sealed class CaptureTradeHandler(
 
     public async Task<CaptureTradeResult> HandleAsync(
         CaptureTradeRequest request,
-        string capturedBySubject,
+        Caller caller,
         CancellationToken cancellationToken)
     {
-        // Idempotency first. A repeat of an external reference returns what
-        // was booked the first time, whatever else is in the body.
+        // Ownership first (design.md section 3, step B.3), before anything
+        // that could reveal whether the account exists. A trader gets 403 for
+        // "not yours" and "no such account" alike; ops gets 404 for the latter.
+        var account = await dbContext.Accounts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(a => a.Id == request.AccountId, cancellationToken);
+
+        var access = AccountAccess.Decide(caller, account);
+        if (access == AccessDecision.Forbidden)
+        {
+            return new CaptureTradeResult.Forbidden();
+        }
+
+        if (account is null || access == AccessDecision.NotFound)
+        {
+            return new CaptureTradeResult.NotFound("account", request.AccountId);
+        }
+
+        // Idempotency. A repeat of an external reference returns what was
+        // booked the first time, whatever else is in the body.
         if (request.ExternalRef is not null)
         {
             var existing = await dbContext.Trades
@@ -33,6 +52,20 @@ public sealed class CaptureTradeHandler(
 
             if (existing is not null)
             {
+                // The reference is unique across all accounts. If the original
+                // sits on an account this caller may not see, they learn nothing.
+                if (existing.AccountId != request.AccountId)
+                {
+                    var existingAccount = await dbContext.Accounts
+                        .AsNoTracking()
+                        .SingleOrDefaultAsync(a => a.Id == existing.AccountId, cancellationToken);
+
+                    if (AccountAccess.Decide(caller, existingAccount) != AccessDecision.Allowed)
+                    {
+                        return new CaptureTradeResult.Forbidden();
+                    }
+                }
+
                 // Every trade updates its position in the same commit, so the
                 // position must exist; Single (not SingleOrDefault) states that.
                 var existingPosition = await dbContext.Positions
@@ -46,17 +79,7 @@ public sealed class CaptureTradeHandler(
             }
         }
 
-        // References. Unknown ids are 404; they are not payload mistakes.
-        // Build step 7 adds the ownership check here, between existence and
-        // validation, so a caller learns nothing about accounts they do not own.
-        var account = await dbContext.Accounts
-            .AsNoTracking()
-            .SingleOrDefaultAsync(a => a.Id == request.AccountId, cancellationToken);
-        if (account is null)
-        {
-            return new CaptureTradeResult.NotFound("account", request.AccountId);
-        }
-
+        // Instruments are not owned, so an unknown id is a plain 404.
         var instrument = await dbContext.Instruments
             .AsNoTracking()
             .SingleOrDefaultAsync(i => i.Id == request.InstrumentId, cancellationToken);
@@ -96,7 +119,7 @@ public sealed class CaptureTradeHandler(
             Price = request.Price,
             ExecutedAtUtc = request.ExecutedAtUtc.UtcDateTime,
             ExternalRef = request.ExternalRef,
-            CapturedBySubject = capturedBySubject,
+            CapturedBySubject = caller.Subject,
             CapturedAtUtc = now.UtcDateTime,
         };
         // Added once, outside the loop. If a save attempt fails its transaction

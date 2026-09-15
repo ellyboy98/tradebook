@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TradeBook.Api.Infrastructure.Auth;
 using TradeBook.Api.Persistence;
 
 namespace TradeBook.Api.Features.TradeCapture;
@@ -9,18 +10,26 @@ namespace TradeBook.Api.Features.TradeCapture;
 /// </summary>
 public sealed class BlotterHandler(TradeBookDbContext dbContext)
 {
-    /// <returns>The page, or <c>null</c> when the account does not exist.</returns>
-    public async Task<BlotterPage?> HandleAsync(BlotterQuery query, CancellationToken cancellationToken)
+    public async Task<QueryResult<BlotterPage>> HandleAsync(
+        BlotterQuery query,
+        Caller caller,
+        CancellationToken cancellationToken)
     {
         // [Required] on the query model guarantees this by the time MVC calls
         // the controller; the throw documents the assumption for other callers.
         var accountId = query.AccountId
             ?? throw new ArgumentException("AccountId is required.", nameof(query));
 
-        // Build step 7 adds the ownership check here.
-        if (!await dbContext.Accounts.AnyAsync(a => a.Id == accountId, cancellationToken))
+        var account = await dbContext.Accounts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+
+        switch (AccountAccess.Decide(caller, account))
         {
-            return null;
+            case AccessDecision.Forbidden:
+                return new QueryResult<BlotterPage>.Forbidden();
+            case AccessDecision.NotFound:
+                return new QueryResult<BlotterPage>.NotFound("account", accountId);
         }
 
         var trades = dbContext.Trades
@@ -67,6 +76,6 @@ public sealed class BlotterHandler(TradeBookDbContext dbContext)
                 t.ExternalRef))
             .ToListAsync(cancellationToken);
 
-        return new BlotterPage(items, query.Page, query.PageSize, totalCount);
+        return new QueryResult<BlotterPage>.Found(new BlotterPage(items, query.Page, query.PageSize, totalCount));
     }
 }

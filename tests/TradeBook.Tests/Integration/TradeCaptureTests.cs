@@ -21,7 +21,7 @@ public sealed class TradeCaptureTests(SqlServerFixture sqlServer) : IAsyncLifeti
     public Task InitializeAsync()
     {
         _factory = new TradeBookApiFactory(sqlServer.ConnectionString);
-        _client = _factory.CreateClient();
+        _client = _factory.CreateOpsClient();
         return Task.CompletedTask;
     }
 
@@ -62,7 +62,7 @@ public sealed class TradeCaptureTests(SqlServerFixture sqlServer) : IAsyncLifeti
 
         storedTrade.Side.Should().Be(TradeSide.Buy);
         storedTrade.ExecutedAtUtc.Should().Be(ExecutedAt.UtcDateTime);
-        storedTrade.CapturedBySubject.Should().NotBeNullOrWhiteSpace();
+        storedTrade.CapturedBySubject.Should().Be(TestTokens.OpsSubject, "the audit column records the token's sub claim");
         storedTrade.CapturedAtUtc.Kind.Should().Be(DateTimeKind.Utc);
         storedTrade.CapturedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
 

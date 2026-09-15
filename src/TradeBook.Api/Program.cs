@@ -4,6 +4,7 @@ using Serilog.Events;
 using Serilog.Formatting.Compact;
 using TradeBook.Api.Features.Positions;
 using TradeBook.Api.Features.TradeCapture;
+using TradeBook.Api.Infrastructure.Auth;
 using TradeBook.Api.Infrastructure.Health;
 using TradeBook.Api.Persistence;
 
@@ -34,6 +35,8 @@ try
     builder.Services.AddProblemDetails();
     builder.Services.AddTradeBookPersistence();
     builder.Services.AddTradeBookHealthChecks();
+    builder.Services.AddTradeBookAuthentication();
+    builder.Services.AddTradeBookAuthorization();
 
     // Handlers are plain scoped classes (CLAUDE.md): one per request, same
     // lifetime as the DbContext they use.
@@ -58,6 +61,12 @@ try
     // Outermost so the one-line request summary reflects the final status code.
     app.UseSerilogRequestLogging(options => options.GetLevel = GetRequestLogLevel);
     app.UseExceptionHandler();
+    // Gives the empty 401 and 403 responses from authentication and
+    // authorisation a problem-details body, like every other error.
+    app.UseStatusCodePages();
+
+    app.UseAuthentication();
+    app.UseAuthorization();
 
     app.MapControllers();
     app.MapTradeBookHealthChecks();

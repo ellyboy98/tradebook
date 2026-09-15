@@ -86,7 +86,9 @@ public static class TradeCaptureTestSupport
     public static IEnumerable<string?> FieldErrors(JsonElement problem, string field)
         => problem.GetProperty("errors").GetProperty(field).EnumerateArray().Select(e => e.GetString());
 
-    public static async Task<int> CreateAccountAsync(this SqlServerFixture sqlServer)
+    /// <param name="sqlServer">The shared database.</param>
+    /// <param name="ownerSubject">The owning trader's subject; a fresh random one when the test does not care.</param>
+    public static async Task<int> CreateAccountAsync(this SqlServerFixture sqlServer, string? ownerSubject = null)
     {
         await using var dbContext = sqlServer.CreateDbContext();
         var account = new Account
@@ -94,7 +96,7 @@ public static class TradeCaptureTestSupport
             Code = $"T-{Guid.NewGuid():N}"[..12],
             Name = "Test account",
             BaseCurrency = "USD",
-            OwnerSubject = Guid.NewGuid().ToString(),
+            OwnerSubject = ownerSubject ?? Guid.NewGuid().ToString(),
             CreatedAtUtc = DateTime.UtcNow,
         };
         dbContext.Accounts.Add(account);

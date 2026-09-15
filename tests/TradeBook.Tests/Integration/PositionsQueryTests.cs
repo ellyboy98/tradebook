@@ -20,7 +20,7 @@ public sealed class PositionsQueryTests(SqlServerFixture sqlServer) : IAsyncLife
     public Task InitializeAsync()
     {
         _factory = new TradeBookApiFactory(sqlServer.ConnectionString);
-        _client = _factory.CreateClient();
+        _client = _factory.CreateOpsClient();
         return Task.CompletedTask;
     }
 

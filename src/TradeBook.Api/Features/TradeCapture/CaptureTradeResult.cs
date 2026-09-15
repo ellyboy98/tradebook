@@ -18,6 +18,9 @@ public abstract record CaptureTradeResult
     /// <summary>A trade with this external reference already existed; nothing was written. 200.</summary>
     public sealed record AlreadyCaptured(CaptureTradeResponse Response) : CaptureTradeResult;
 
+    /// <summary>The caller may not use this account. 403, and nothing about whether it exists.</summary>
+    public sealed record Forbidden : CaptureTradeResult;
+
     /// <summary>The account or instrument id does not exist. 404.</summary>
     public sealed record NotFound(string Resource, int Id) : CaptureTradeResult;
 

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TradeBook.Api.Domain;
+using TradeBook.Api.Infrastructure.Auth;
 using TradeBook.Api.Persistence;
 
 namespace TradeBook.Api.Features.Positions;
@@ -10,16 +11,22 @@ namespace TradeBook.Api.Features.Positions;
 /// </summary>
 public sealed class GetPositionsHandler(TradeBookDbContext dbContext)
 {
-    /// <returns>The positions, or <c>null</c> when the account does not exist.</returns>
-    public async Task<IReadOnlyList<PositionValuationResponse>?> HandleAsync(
+    public async Task<QueryResult<IReadOnlyList<PositionValuationResponse>>> HandleAsync(
         int accountId,
         bool includeFlat,
+        Caller caller,
         CancellationToken cancellationToken)
     {
-        // Build step 7 adds the ownership check here.
-        if (!await dbContext.Accounts.AnyAsync(a => a.Id == accountId, cancellationToken))
+        var account = await dbContext.Accounts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+
+        switch (AccountAccess.Decide(caller, account))
         {
-            return null;
+            case AccessDecision.Forbidden:
+                return new QueryResult<IReadOnlyList<PositionValuationResponse>>.Forbidden();
+            case AccessDecision.NotFound:
+                return new QueryResult<IReadOnlyList<PositionValuationResponse>>.NotFound("account", accountId);
         }
 
         var rows = await dbContext.Positions
@@ -48,7 +55,7 @@ public sealed class GetPositionsHandler(TradeBookDbContext dbContext)
 
         // Valuation happens here, in memory, because the formula belongs to
         // PositionMath and SQL is not where domain rules live.
-        return rows
+        var positions = rows
             .Select(row =>
             {
                 var state = new PositionState(row.NetQuantity, row.AverageCost, row.RealisedPnl);
@@ -71,5 +78,7 @@ public sealed class GetPositionsHandler(TradeBookDbContext dbContext)
                     row.UpdatedAtUtc);
             })
             .ToList();
+
+        return new QueryResult<IReadOnlyList<PositionValuationResponse>>.Found(positions);
     }
 }

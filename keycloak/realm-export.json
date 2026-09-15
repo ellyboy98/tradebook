@@ -1,0 +1,117 @@
+{
+  "realm": "tradebook",
+  "displayName": "TradeBook",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      {
+        "name": "trader",
+        "description": "Submits executions for accounts they own and watches live positions."
+      },
+      {
+        "name": "ops",
+        "description": "Reads the blotter and positions for any account; seeds instruments and accounts."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "tradebook-api",
+      "name": "TradeBook API",
+      "description": "The audience tokens must name. Nobody logs in as this client; it only exists so the API can check aud.",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "tradebook-web",
+      "name": "TradeBook blotter page",
+      "description": "The browser page. Public client with PKCE; no secret because a browser cannot keep one.",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://localhost:5000",
+      "baseUrl": "/",
+      "redirectUris": ["http://localhost:5000/*"],
+      "webOrigins": ["http://localhost:5000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "tradebook-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "tradebook-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm roles as a flat roles claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+      "username": "trader1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Tara",
+      "lastName": "Trader",
+      "email": "trader1@tradebook.local",
+      "credentials": [{ "type": "password", "value": "trader1", "temporary": false }],
+      "realmRoles": ["trader"]
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "username": "trader2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Tom",
+      "lastName": "Trader",
+      "email": "trader2@tradebook.local",
+      "credentials": [{ "type": "password", "value": "trader2", "temporary": false }],
+      "realmRoles": ["trader"]
+    },
+    {
+      "id": "3d5a2f6e-8b1c-4e7a-9f0d-2c4b6a8e1f35",
+      "username": "ops1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Olivia",
+      "lastName": "Ops",
+      "email": "ops1@tradebook.local",
+      "credentials": [{ "type": "password", "value": "ops1", "temporary": false }],
+      "realmRoles": ["ops"]
+    }
+  ]
+}

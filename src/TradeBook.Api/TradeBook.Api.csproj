@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Validates Keycloak-issued JWTs against the realm's published keys. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.20" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.20" />
     <!-- Design-time only: lets `dotnet ef` scaffold migrations against this project. Not shipped. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.20">
