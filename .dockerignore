@@ -1,0 +1,16 @@
+# Keep the build context small: only the API project and shared props are needed.
+**/bin/
+**/obj/
+**/.vs/
+.git/
+.gitignore
+.dockerignore
+docker-compose.yml
+docs/
+diagrams/
+prototypes/
+tests/
+*.md
+*.docx
+*.pdf
+*.sln

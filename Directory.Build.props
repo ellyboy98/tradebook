@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    Shared build settings for every project in the solution. MSBuild picks this
+    file up automatically from any project below this directory, so the
+    conventions in CLAUDE.md are enforced in one place rather than per .csproj.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

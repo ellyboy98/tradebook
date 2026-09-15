@@ -1,0 +1,86 @@
+name: tradebook
+
+# SQL Server, Keycloak (dev mode, realm imported from keycloak/realm-export.json)
+# and the API. The API waits for both to report healthy.
+#
+# Every password here is a development credential. Override them with
+# MSSQL_SA_PASSWORD / KEYCLOAK_ADMIN_PASSWORD in the environment or a .env
+# file; the defaults keep `docker compose up` working with zero setup.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-TradeBook_Dev2026}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      # $$ stops compose from interpolating the variable; the shell inside the
+      # container expands it instead. -C trusts the self-signed certificate.
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -Q \"SELECT 1\" > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7
+    # start-dev: HTTP, no hostname checks, embedded database. --import-realm
+    # loads keycloak/realm-export.json on first start. No volume, so every
+    # fresh container re-imports the realm and the demo users.
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Exposes /health/* on the management port (9000) for the healthcheck.
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    healthcheck:
+      # The image has no curl, but bash can open a TCP socket itself.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+  api:
+    build:
+      context: .
+      dockerfile: src/TradeBook.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Double underscore is how environment variables express the ':'
+      # hierarchy of appsettings.json (ConnectionStrings:TradeBook).
+      ConnectionStrings__TradeBook: "Server=sqlserver,1433;Database=TradeBook;User Id=sa;Password=${MSSQL_SA_PASSWORD:-TradeBook_Dev2026};Encrypt=True;TrustServerCertificate=True"
+      # The API creates the database and applies pending migrations when it
+      # starts (ADR-008), so a fresh volume produces a working schema.
+      Database__MigrateOnStartup: "true"
+      # Metadata and signing keys are fetched over the compose network, but
+      # tokens are issued to the browser at localhost:8080, so the issuer the
+      # API accepts is the public URL. See KeycloakOptions.
+      Keycloak__Authority: http://keycloak:8080/realms/tradebook
+      Keycloak__Issuer: http://localhost:8080/realms/tradebook
+      Keycloak__RequireHttpsMetadata: "false"
+    ports:
+      - "5000:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  sqlserver-data:

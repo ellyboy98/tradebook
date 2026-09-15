@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TradeBook — Blotter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Tokens: docs/ui-design.md section 3. Change them there first. */
+:root{
+  --surface-0:#10131A; --surface-1:#171B24; --surface-2:#1F2430;
+  --line:#2C3340; --text:#E3E7EE; --text-dim:#8B94A5;
+  --gain:#3FB6A8; --loss:#D9544D; --accent:#C9A227;
+  --rail:200px; --ticket:320px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--surface-0); color:var(--text);
+  font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:13px; line-height:1.45;
+  font-variant-numeric:tabular-nums slashed-zero;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+[hidden]{display:none !important}
+.num{font-variant-numeric:tabular-nums slashed-zero;text-align:right;font-weight:500;font-size:14px}
+.gain{color:var(--gain)} .loss{color:var(--loss)} .dim{color:var(--text-dim)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+
+/* connection bar */
+#conn{display:none;padding:6px 16px;font-size:12px;font-weight:500;
+  background:#3A2F16;color:#E9C960;border-bottom:1px solid var(--line)}
+#conn.live{background:#2A2614;color:var(--accent)}
+#conn.show{display:block}
+/* stale data is shown, but dimmed (ui-design.md section 8) */
+.stale .num,.stale #total{color:var(--text-dim)}
+
+/* signed-out panel */
+#signedOut{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:var(--surface-1);border:1px solid var(--line);border-radius:4px;
+  padding:36px 44px;text-align:center;min-width:320px;max-width:420px}
+.mark{font-size:22px;font-weight:700;letter-spacing:.02em}
+.mark span{color:var(--accent)}
+.card p{color:var(--text-dim);margin-top:8px;font-size:13px}
+#signIn{margin-top:22px;min-width:160px}
+#authErr{margin-top:14px;color:var(--loss);font-size:12px}
+
+/* shell */
+#shell{flex:1;display:grid;grid-template-columns:var(--rail) 1fr var(--ticket);min-height:0}
+
+/* account rail */
+#rail{background:var(--surface-1);border-right:1px solid var(--line);padding:14px 0 0;
+  overflow-y:auto;display:flex;flex-direction:column}
+#rail h2{font-size:12px;font-weight:600;color:var(--text-dim);padding:0 14px 10px}
+.acct{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);
+  font:inherit;padding:8px 14px;cursor:pointer;border-left:2px solid transparent}
+.acct .code{font-weight:600}
+.acct .meta{font-size:12px;color:var(--text-dim)}
+.acct[aria-current="true"]{background:var(--surface-2);border-left-color:var(--accent)}
+.railFoot{margin-top:auto;padding:12px 14px;border-top:1px solid var(--line);
+  font-size:12px;color:var(--text-dim);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.railFoot b{color:var(--text);font-weight:600}
+.linkBtn{background:none;border:0;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;padding:0}
+
+/* main */
+#main{display:flex;flex-direction:column;min-width:0;min-height:0}
+header{display:flex;align-items:baseline;justify-content:space-between;
+  padding:16px 20px 12px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;font-weight:600}
+header .sub{font-size:12px;color:var(--text-dim);margin-top:2px}
+#total{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums slashed-zero}
+#totalLabel{font-size:12px;color:var(--text-dim);text-align:right}
+
+.panel{display:flex;flex-direction:column;min-height:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 20px 8px}
+.panel-head h2{font-size:15px;font-weight:600}
+.scroll{overflow-y:auto;min-height:0}
+#positionsPanel{flex:1 1 55%;border-bottom:1px solid var(--line)}
+#blotterPanel{flex:1 1 45%}
+
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;background:var(--surface-2);z-index:1;
+  font-size:12px;font-weight:600;color:var(--text-dim);text-align:left;
+  padding:7px 20px;border-bottom:1px solid var(--line);white-space:nowrap}
+thead th.r{text-align:right}
+tbody td{padding:0 20px;height:32px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr:hover td,tbody tr:focus-visible td{background:var(--surface-2)}
+tbody tr[tabindex]{cursor:pointer}
+.sym{font-weight:600}
+td.msg{padding:18px 20px;height:auto;white-space:normal}
+
+/* tick flash: the only motion on the screen (ui-design.md section 6) */
+@keyframes flashUp{from{background:rgba(63,182,168,.28)}to{background:transparent}}
+@keyframes flashDn{from{background:rgba(217,84,77,.28)}to{background:transparent}}
+td.up{animation:flashUp .4s ease-out}
+td.dn{animation:flashDn .4s ease-out}
+.tri{display:none;font-size:10px;margin-right:4px}
+@media (prefers-reduced-motion: reduce){
+  td.up,td.dn{animation:none}
+  td.up .tri,td.dn .tri{display:inline}
+  td.up .tri::before{content:"\25B2";color:var(--gain)}
+  td.dn .tri::before{content:"\25BC";color:var(--loss)}
+}
+
+/* ticket */
+#ticket{background:var(--surface-1);border-left:1px solid var(--line);
+  padding:16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+#ticket h2{font-size:15px;font-weight:600}
+.acctOn{font-size:12px;color:var(--text-dim)}
+.acctOn b{color:var(--text);font-weight:600}
+label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:5px}
+input,select{width:100%;background:var(--surface-2);border:1px solid var(--line);
+  color:var(--text);font:inherit;font-size:14px;padding:8px 10px;border-radius:3px;
+  font-variant-numeric:tabular-nums slashed-zero}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.side{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.side button{background:var(--surface-2);border:1px solid var(--line);color:var(--text-dim);
+  font:inherit;font-size:14px;font-weight:600;padding:9px;border-radius:3px;cursor:pointer;min-height:36px}
+.side button[aria-pressed="true"][data-side="Buy"]{background:var(--gain);border-color:var(--gain);color:#06231F}
+.side button[aria-pressed="true"][data-side="Sell"]{background:var(--loss);border-color:var(--loss);color:#2A0B09}
+.primary{background:var(--accent);border:0;color:#1A1405;font:inherit;font-size:14px;
+  font-weight:700;padding:11px;border-radius:3px;cursor:pointer;min-height:36px}
+.primary:disabled{opacity:.45;cursor:not-allowed}
+#preview{font-size:12px;color:var(--text-dim);min-height:32px}
+#preview b{color:var(--text)}
+.err{color:var(--loss);font-size:12px;margin-top:5px;display:none}
+.err.show{display:block}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--surface-2);border:1px solid var(--accent);color:var(--text);
+  padding:9px 16px;border-radius:3px;font-size:13px;font-weight:500;
+  opacity:0;pointer-events:none;transition:opacity .18s}
+#toast.show{opacity:1}
+
+@media (max-width:1280px){ :root{--rail:0px} #rail{display:none} }
+@media (max-width:1024px){
+  #shell{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  #ticket{border-left:0;border-top:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+
+<div id="conn" role="status"></div>
+
+<section id="signedOut" hidden aria-labelledby="signedOutH">
+  <div class="card">
+    <div class="mark" id="signedOutH">Trade<span>Book</span></div>
+    <p>Sign in with your Keycloak account to see your positions.</p>
+    <button id="signIn" class="primary" type="button">Sign in</button>
+    <div id="authErr" role="alert"></div>
+  </div>
+</section>
+
+<div id="shell" hidden>
+
+  <nav id="rail" aria-label="Accounts">
+    <h2>Accounts</h2>
+    <div id="railList"></div>
+    <div class="railFoot">
+      <span id="who"></span>
+      <button id="signOut" class="linkBtn" type="button">Sign out</button>
+    </div>
+  </nav>
+
+  <main id="main">
+    <header>
+      <div>
+        <h1 id="acctName">&nbsp;</h1>
+        <div class="sub" id="acctCode">&nbsp;</div>
+      </div>
+      <div>
+        <div id="total" class="num">+0.00</div>
+        <div id="totalLabel">Unrealised P&amp;L</div>
+      </div>
+    </header>
+
+    <section class="panel" id="positionsPanel" aria-labelledby="posH">
+      <div class="panel-head"><h2 id="posH">Positions</h2>
+        <span class="dim" style="font-size:12px">Prices update every second</span></div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th scope="col">Symbol</th><th scope="col">Direction</th>
+            <th scope="col" class="r">Net quantity</th><th scope="col" class="r">Average cost</th>
+            <th scope="col" class="r">Last price</th><th scope="col" class="r">Unrealised</th>
+            <th scope="col" class="r">Realised</th>
+          </tr></thead>
+          <tbody id="posBody"><tr><td colspan="7" class="dim msg">Loading positions</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="blotterPanel" aria-labelledby="blotH">
+      <div class="panel-head"><h2 id="blotH">Blotter</h2>
+        <span class="dim" style="font-size:12px">Latest 50</span></div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th scope="col">Time</th><th scope="col">Symbol</th><th scope="col">Side</th>
+            <th scope="col" class="r">Quantity</th><th scope="col" class="r">Price</th>
+            <th scope="col">Reference</th>
+          </tr></thead>
+          <tbody id="blotBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <aside id="ticket" aria-labelledby="tktH">
+    <h2 id="tktH">New trade</h2>
+    <div class="acctOn">Booking to <b id="tktAcct">&nbsp;</b></div>
+
+    <div>
+      <label for="inst">Instrument</label>
+      <select id="inst"></select>
+      <div class="err" id="instErr"></div>
+    </div>
+
+    <div>
+      <span class="dim" style="font-size:12px;font-weight:600;display:block;margin-bottom:5px">Side</span>
+      <div class="side" role="group" aria-label="Side">
+        <button type="button" data-side="Buy" aria-pressed="true">Buy</button>
+        <button type="button" data-side="Sell" aria-pressed="false">Sell</button>
+      </div>
+    </div>
+
+    <div>
+      <label for="qty">Quantity</label>
+      <input id="qty" type="number" min="0" step="1" value="100" inputmode="decimal">
+      <div class="err" id="qtyErr">Quantity must be greater than zero.</div>
+    </div>
+
+    <div>
+      <label for="px">Price</label>
+      <input id="px" type="number" min="0" step="0.01" inputmode="decimal">
+      <div class="err" id="pxErr">Price must be greater than zero.</div>
+    </div>
+
+    <div id="preview"></div>
+    <button id="book" class="primary" type="button">Book trade</button>
+    <div class="err" id="formErr" role="alert"></div>
+  </aside>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script src="lib/signalr/signalr.min.js"></script>
+<script>
+(() => {
+'use strict';
+
+// ---------------------------------------------------------------- helpers
+const $ = id => document.getElementById(id);
+const MINUS = '−', DASH = '—';
+const fmt = (n, d = 2) => (n < 0 ? MINUS : '+') + Math.abs(n).toFixed(d);
+const plain = (n, d = 2) => Number(n).toFixed(d);
+// Up to six decimals, at least two, trailing zeros beyond two trimmed.
+const money = n => { const s = Number(n).toFixed(6); return s.replace(/(\.\d\d\d*?)0+$/, '$1'); };
+const qty = n => Math.abs(n).toFixed(4).replace(/\.?0+$/, '');
+const signedQty = n => (n < 0 ? MINUS : '+') + qty(n);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const time = iso => new Date(iso).toLocaleTimeString([], { hour12: false });
+
+const state = {
+  config: null,            // /api/client-config
+  oidc: null,              // Keycloak discovery document
+  accounts: [],
+  instruments: [],
+  instrumentById: new Map(),
+  current: null,           // selected account
+  positions: new Map(),    // instrumentId -> position row (with lastPrice / unrealisedPnl)
+  side: 'Buy',
+  connection: null,
+  subscribedAccountId: null,
+  loadToken: 0,
+};
+
+// ---------------------------------------------------------------- auth: OpenID Connect authorization code + PKCE
+// Written out rather than imported so every step is visible: discovery,
+// redirect with a code challenge, code exchange with the verifier, refresh,
+// and logout. The page never sees a password; Keycloak does.
+const auth = {
+  TOKENS: 'tradebook.tokens',
+  PKCE: 'tradebook.pkce',
+  tokens: null,
+  refreshTimer: null,
+
+  redirectUri() { return location.origin + location.pathname; },
+  b64url(bytes) { return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+  random(bytes) { const a = new Uint8Array(bytes); crypto.getRandomValues(a); return this.b64url(a); },
+  async sha256(text) { return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))); },
+
+  async init() {
+    if (!crypto.subtle) throw new Error('Open TradeBook on http://localhost:5000; the sign-in flow needs a secure context.');
+    state.oidc = await (await fetch(state.config.authority + '/.well-known/openid-configuration')).json();
+
+    const params = new URLSearchParams(location.search);
+    if (params.has('code')) {
+      await this.completeLogin(params);
+    } else if (params.has('error')) {
+      history.replaceState(null, '', location.pathname);
+      throw new Error(params.get('error_description') || params.get('error'));
+    } else {
+      this.tokens = JSON.parse(sessionStorage.getItem(this.TOKENS) || 'null');
+    }
+
+    if (this.tokens && this.tokens.expires_at - Date.now() < 10_000) {
+      await this.refresh().catch(() => { this.tokens = null; });
+    }
+    if (this.tokens) this.scheduleRefresh();
+    return this.tokens !== null;
+  },
+
+  async login() {
+    const verifier = this.random(48), st = this.random(16);
+    sessionStorage.setItem(this.PKCE, JSON.stringify({ verifier, state: st }));
+    const url = new URL(state.oidc.authorization_endpoint);
+    url.search = new URLSearchParams({
+      client_id: state.config.clientId,
+      response_type: 'code',
+      scope: 'openid',
+      redirect_uri: this.redirectUri(),
+      state: st,
+      code_challenge: this.b64url(await this.sha256(verifier)),
+      code_challenge_method: 'S256',
+    });
+    location.assign(url);
+  },
+
+  async completeLogin(params) {
+    const saved = JSON.parse(sessionStorage.getItem(this.PKCE) || 'null');
+    sessionStorage.removeItem(this.PKCE);
+    history.replaceState(null, '', location.pathname);
+    if (!saved || saved.state !== params.get('state')) throw new Error('Sign-in did not complete; please try again.');
+    this.store(await this.tokenRequest({
+      grant_type: 'authorization_code',
+      code: params.get('code'),
+      redirect_uri: this.redirectUri(),
+      code_verifier: saved.verifier,
+    }));
+  },
+
+  async tokenRequest(fields) {
+    const response = await fetch(state.oidc.token_endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: state.config.clientId, ...fields }),
+    });
+    if (!response.ok) throw new Error('Token request failed (' + response.status + ').');
+    return response.json();
+  },
+
+  store(tokens) {
+    tokens.expires_at = Date.now() + tokens.expires_in * 1000;
+    this.tokens = tokens;
+    sessionStorage.setItem(this.TOKENS, JSON.stringify(tokens));
+  },
+
+  scheduleRefresh() {
+    clearTimeout(this.refreshTimer);
+    const inMs = Math.max(5_000, this.tokens.expires_at - Date.now() - 30_000);
+    this.refreshTimer = setTimeout(() => this.refresh().catch(() => showSignedOut('Your session ended. Sign in again.')), inMs);
+  },
+
+  async refresh() {
+    if (!this.tokens || !this.tokens.refresh_token) throw new Error('No refresh token.');
+    this.store(await this.tokenRequest({ grant_type: 'refresh_token', refresh_token: this.tokens.refresh_token }));
+    this.scheduleRefresh();
+  },
+
+  accessToken() { return this.tokens ? this.tokens.access_token : null; },
+
+  claims() {
+    const token = this.accessToken();
+    if (!token) return {};
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(part.padEnd(part.length + (4 - part.length % 4) % 4, '=')));
+  },
+
+  logout() {
+    const tokens = this.tokens;
+    this.tokens = null;
+    clearTimeout(this.refreshTimer);
+    sessionStorage.removeItem(this.TOKENS);
+    const url = new URL(state.oidc.end_session_endpoint);
+    const fields = { client_id: state.config.clientId, post_logout_redirect_uri: this.redirectUri() };
+    if (tokens && tokens.id_token) fields.id_token_hint = tokens.id_token;
+    url.search = new URLSearchParams(fields);
+    location.assign(url);
+  },
+};
+
+// ---------------------------------------------------------------- REST
+async function api(path, options = {}) {
+  const send = () => fetch(path, {
+    method: options.method || 'GET',
+    headers: {
+      'Authorization': 'Bearer ' + auth.accessToken(),
+      ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
+  let response = await send();
+  if (response.status === 401) {
+    // The token may have just expired; one refresh, one retry, then give up.
+    try { await auth.refresh(); } catch { showSignedOut('Your session ended. Sign in again.'); throw new Error('Signed out.'); }
+    response = await send();
+    if (response.status === 401) { showSignedOut('Your session ended. Sign in again.'); throw new Error('Signed out.'); }
+  }
+  return response;
+}
+
+async function problemFrom(response) {
+  let detail = 'Request failed (' + response.status + ').', problem = null;
+  try { problem = await response.json(); detail = problem.detail || problem.title || detail; } catch { /* not JSON */ }
+  const error = new Error(detail);
+  error.status = response.status;
+  error.problem = problem;
+  return error;
+}
+
+async function getJson(path) {
+  const response = await api(path);
+  if (!response.ok) throw await problemFrom(response);
+  return response.json();
+}
+
+// ---------------------------------------------------------------- rendering
+function showSignedOut(message) {
+  if (state.connection) { state.connection.stop().catch(() => {}); state.connection = null; }
+  $('shell').hidden = true;
+  $('signedOut').hidden = false;
+  $('authErr').textContent = message || '';
+}
+
+function renderRail() {
+  $('railList').innerHTML = state.accounts.map(a => `
+    <button class="acct" type="button" data-id="${a.id}" aria-current="${state.current && state.current.id === a.id}">
+      <span class="code">${esc(a.code)}</span><br><span class="meta">${esc(a.name)}</span>
+    </button>`).join('');
+}
+
+function renderHeader() {
+  const a = state.current;
+  $('acctName').textContent = a ? a.name : 'No accounts';
+  $('acctCode').textContent = a ? a.code + ' · ' + a.baseCurrency : 'Ask operations to assign you an account.';
+  $('tktAcct').textContent = a ? a.code : DASH;
+}
+
+function direction(net) { return net > 0 ? ['Long', 'gain'] : net < 0 ? ['Short', 'loss'] : ['Flat', 'dim']; }
+
+function rowHtml(p) {
+  const net = Number(p.netQuantity), avg = Number(p.averageCost), realised = Number(p.realisedPnl);
+  const last = p.lastPrice == null ? null : Number(p.lastPrice);
+  const unrealised = p.unrealisedPnl == null ? null : Number(p.unrealisedPnl);
+  const [word, cls] = direction(net);
+  const flat = net === 0;
+  return `<tr data-instrument="${p.instrumentId}" tabindex="0">
+    <td class="sym">${esc(p.symbol)}</td>
+    <td class="${cls}">${word}</td>
+    <td class="num">${flat ? '0' : signedQty(net)}</td>
+    <td class="num">${flat ? DASH : plain(avg, 4)}</td>
+    <td class="num" data-cell="px"><span class="tri"></span>${last == null ? DASH : plain(last, 2)}</td>
+    <td class="num ${flat || unrealised == null ? 'dim' : (unrealised >= 0 ? 'gain' : 'loss')}" data-cell="unrl"><span class="tri"></span>${flat || unrealised == null ? DASH : fmt(unrealised)}</td>
+    <td class="num ${realised >= 0 ? 'gain' : 'loss'}">${fmt(realised)}</td>
+  </tr>`;
+}
+
+function renderPositions() {
+  const body = $('posBody');
+  const rows = [...state.positions.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+  if (!state.current) {
+    body.innerHTML = '<tr><td colspan="7" class="dim msg">You have no accounts. Ask operations to assign one.</td></tr>';
+  } else if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="7" class="dim msg">No positions in this account. Book a trade to open one.</td></tr>';
+  } else {
+    body.innerHTML = rows.map(rowHtml).join('');
+  }
+  renderTotal();
+}
+
+function renderTotal() {
+  let total = 0;
+  for (const p of state.positions.values()) if (p.unrealisedPnl != null) total += Number(p.unrealisedPnl);
+  const t = $('total');
+  t.textContent = fmt(total);
+  t.className = 'num ' + (total >= 0 ? 'gain' : 'loss');
+}
+
+function renderBlotter(items) {
+  $('blotBody').innerHTML = items.length
+    ? items.map(t => {
+        const instrument = state.instrumentById.get(t.instrumentId);
+        return `<tr>
+          <td class="dim">${time(t.executedAtUtc)}</td>
+          <td class="sym">${instrument ? esc(instrument.symbol) : '#' + t.instrumentId}</td>
+          <td class="${t.side === 'Buy' ? 'gain' : 'loss'}">${esc(t.side)}</td>
+          <td class="num">${qty(Number(t.quantity))}</td>
+          <td class="num">${money(t.price)}</td>
+          <td class="dim">${t.externalRef ? esc(t.externalRef) : DASH}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" class="dim msg">No trades captured yet.</td></tr>';
+}
+
+async function refreshBlotter() {
+  if (!state.current) return;
+  const page = await getJson(`/api/trades?accountId=${state.current.id}&pageSize=50`);
+  renderBlotter(page.items);
+}
+
+function flash(cell, delta) {
+  if (!cell || delta === 0) return;
+  cell.classList.remove('up', 'dn');
+  void cell.offsetWidth; // restart the animation
+  cell.classList.add(delta > 0 ? 'up' : 'dn');
+  setTimeout(() => cell.classList.remove('up', 'dn'), 420);
+}
+
+// ---------------------------------------------------------------- live updates
+function onPositionValued(m) {
+  const instrument = state.instrumentById.get(m.instrumentId);
+  if (instrument) instrument.lastPrice = m.lastPrice; // keeps the ticket's pre-filled price current
+  if (!state.current || m.accountId !== state.current.id) return;
+  const p = state.positions.get(m.instrumentId);
+  if (!p) return;
+
+  const previousPrice = p.lastPrice == null ? null : Number(p.lastPrice);
+  const previousUnrealised = p.unrealisedPnl == null ? null : Number(p.unrealisedPnl);
+  p.lastPrice = m.lastPrice;
+  p.unrealisedPnl = m.unrealisedPnl;
+
+  const row = document.querySelector(`#posBody tr[data-instrument="${m.instrumentId}"]`);
+  if (!row) return;
+  const priceCell = row.querySelector('[data-cell="px"]');
+  const unrealisedCell = row.querySelector('[data-cell="unrl"]');
+  const price = Number(m.lastPrice), unrealised = Number(m.unrealisedPnl);
+  flash(priceCell, previousPrice == null ? 0 : price - previousPrice);
+  priceCell.innerHTML = '<span class="tri"></span>' + plain(price, 2);
+  if (Number(p.netQuantity) !== 0) {
+    flash(unrealisedCell, previousUnrealised == null ? 0 : unrealised - previousUnrealised);
+    unrealisedCell.innerHTML = '<span class="tri"></span>' + fmt(unrealised);
+    unrealisedCell.className = 'num ' + (unrealised >= 0 ? 'gain' : 'loss');
+  }
+  renderTotal();
+}
+
+function applyPosition(position) {
+  // Shared by the hub's PositionUpdated and the ticket's 201: merge the new
+  // figures, keep whatever price we last saw, recompute unrealised from it.
+  const existing = state.positions.get(position.instrumentId);
+  const instrument = state.instrumentById.get(position.instrumentId);
+  const lastPrice = existing && existing.lastPrice != null ? existing.lastPrice
+    : instrument && instrument.lastPrice != null ? instrument.lastPrice : null;
+  const net = Number(position.netQuantity), avg = Number(position.averageCost);
+  state.positions.set(position.instrumentId, {
+    accountId: position.accountId,
+    instrumentId: position.instrumentId,
+    symbol: existing ? existing.symbol : (instrument ? instrument.symbol : '#' + position.instrumentId),
+    netQuantity: position.netQuantity,
+    averageCost: position.averageCost,
+    realisedPnl: position.realisedPnl,
+    lastPrice,
+    unrealisedPnl: lastPrice == null ? null : (net === 0 ? 0 : (Number(lastPrice) - avg) * net),
+  });
+  renderPositions();
+  renderPreview();
+}
+
+async function onPositionUpdated(position) {
+  if (!state.current || position.accountId !== state.current.id) return;
+  applyPosition(position);
+  await refreshBlotter().catch(() => {});
+}
+
+function connectionLost() {
+  const c = $('conn');
+  c.textContent = 'Live prices disconnected. Reconnecting.';
+  c.classList.add('show'); c.classList.remove('live');
+  $('main').classList.add('stale');
+}
+
+function connectionLive() {
+  const c = $('conn');
+  c.textContent = 'Prices live';
+  c.classList.add('show', 'live');
+  $('main').classList.remove('stale');
+  setTimeout(() => c.classList.remove('show', 'live'), 2000);
+}
+
+async function connectHub() {
+  const connection = new signalR.HubConnectionBuilder()
+    // accessTokenFactory: the client puts the token in the Authorization
+    // header where it can, and in the access_token query string for
+    // WebSockets, which is what the API's /hubs hook reads.
+    .withUrl(state.config.hubPath, { accessTokenFactory: () => auth.accessToken() })
+    .withAutomaticReconnect()
+    .configureLogging(signalR.LogLevel.Warning)
+    .build();
+  connection.on('PositionUpdated', onPositionUpdated);
+  connection.on('PositionValued', onPositionValued);
+  connection.onreconnecting(connectionLost);
+  connection.onreconnected(async () => {
+    // A reconnect is a new connection id; group membership does not carry over.
+    state.subscribedAccountId = null;
+    if (state.current) await subscribe(state.current.id).catch(() => {});
+    connectionLive();
+  });
+  connection.onclose(connectionLost);
+  state.connection = connection;
+  await connection.start();
+}
+
+async function subscribe(accountId) {
+  const c = state.connection;
+  if (!c || c.state !== signalR.HubConnectionState.Connected) return;
+  if (state.subscribedAccountId !== null && state.subscribedAccountId !== accountId) {
+    await c.invoke('UnsubscribeAccount', state.subscribedAccountId).catch(() => {});
+  }
+  await c.invoke('SubscribeAccount', accountId);
+  state.subscribedAccountId = accountId;
+}
+
+// ---------------------------------------------------------------- account selection
+async function selectAccount(account) {
+  const token = ++state.loadToken; // a later selection wins if responses interleave
+  state.current = account;
+  renderRail(); renderHeader();
+  $('posBody').innerHTML = '<tr><td colspan="7" class="dim msg">Loading positions</td></tr>';
+  $('blotBody').innerHTML = '';
+  clearFormError();
+
+  const [positions, blotter] = await Promise.all([
+    getJson(`/api/accounts/${account.id}/positions?includeFlat=true`),
+    getJson(`/api/trades?accountId=${account.id}&pageSize=50`),
+  ]);
+  if (token !== state.loadToken) return;
+
+  state.positions = new Map(positions.map(p => [p.instrumentId, p]));
+  renderPositions();
+  renderBlotter(blotter.items);
+  renderPreview();
+  await subscribe(account.id).catch(() => {});
+}
+
+// ---------------------------------------------------------------- ticket
+function selectedInstrument() { return state.instrumentById.get(Number($('inst').value)); }
+
+function prefillPrice() {
+  const instrument = selectedInstrument();
+  $('px').value = instrument && instrument.lastPrice != null ? plain(instrument.lastPrice, 2) : '';
+}
+
+function renderPreview() {
+  const instrument = selectedInstrument();
+  const q = parseFloat($('qty').value), px = parseFloat($('px').value);
+  if (!state.current || !instrument || !(q > 0) || !(px > 0)) { $('preview').textContent = ''; return; }
+  // The same four rules as PositionMath, so the preview matches what the
+  // server will store.
+  const p = state.positions.get(instrument.id) || { netQuantity: 0, averageCost: 0 };
+  let net = Number(p.netQuantity), avg = Number(p.averageCost);
+  const signed = state.side === 'Buy' ? q : -q;
+  if (net === 0) { net = signed; avg = px; }
+  else if (Math.sign(net) === Math.sign(signed)) { avg = (Math.abs(net) * avg + q * px) / Math.abs(net + signed); net += signed; }
+  else if (q <= Math.abs(net)) { net += signed; if (net === 0) avg = 0; }
+  else { net += signed; avg = px; }
+  const word = net > 0 ? 'long' : net < 0 ? 'short' : 'flat';
+  $('preview').innerHTML = net === 0
+    ? 'Position becomes <b>flat</b>.'
+    : `Position becomes <b>${qty(net)} ${word}</b> at <b>${plain(avg, 4)}</b>.`;
+}
+
+function validate() {
+  const q = parseFloat($('qty').value), px = parseFloat($('px').value);
+  $('qtyErr').classList.toggle('show', $('qty').dataset.touched === '1' && !(q > 0));
+  $('pxErr').classList.toggle('show', $('px').dataset.touched === '1' && !(px > 0));
+  $('book').disabled = !(state.current && selectedInstrument() && q > 0 && px > 0);
+}
+
+function clearFormError() {
+  for (const id of ['formErr', 'instErr']) { const e = $(id); e.textContent = ''; e.classList.remove('show'); }
+}
+
+function showFieldError(id, message) { const e = $(id); e.textContent = message; e.classList.add('show'); }
+
+function toast(text) {
+  const t = $('toast');
+  t.textContent = text; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+async function book() {
+  const instrument = selectedInstrument();
+  const quantity = parseFloat($('qty').value), price = parseFloat($('px').value);
+  if (!state.current || !instrument || !(quantity > 0) || !(price > 0)) return;
+  clearFormError();
+  $('book').disabled = true;
+  try {
+    const response = await api('/api/trades', {
+      method: 'POST',
+      body: {
+        accountId: state.current.id,
+        instrumentId: instrument.id,
+        side: state.side,
+        quantity,
+        price,
+        // Execution time is left out: the server stamps it. A client-made
+        // reference makes a retried submission idempotent.
+        externalRef: 'UI-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
+      },
+    });
+    if (response.status === 201 || response.status === 200) {
+      const result = await response.json();
+      applyPosition(result.position);
+      await refreshBlotter().catch(() => {});
+      toast('Trade booked');
+      return;
+    }
+    const problem = await response.json().catch(() => null);
+    if (response.status === 400 && problem && problem.errors) {
+      const other = [];
+      for (const [field, messages] of Object.entries(problem.errors)) {
+        const message = messages.join(' ');
+        if (field === 'quantity') showFieldError('qtyErr', message);
+        else if (field === 'price') showFieldError('pxErr', message);
+        else if (field === 'instrumentId') showFieldError('instErr', message);
+        else other.push(message);
+      }
+      if (other.length) showFieldError('formErr', other.join(' '));
+    } else {
+      showFieldError('formErr', (problem && (problem.detail || problem.title)) || 'Request failed (' + response.status + ').');
+    }
+  } catch (error) {
+    if (error.message !== 'Signed out.') showFieldError('formErr', error.message || 'Could not reach TradeBook.');
+  } finally {
+    validate();
+  }
+}
+
+// ---------------------------------------------------------------- wiring
+$('signIn').addEventListener('click', () => auth.login().catch(e => { $('authErr').textContent = e.message; }));
+$('signOut').addEventListener('click', () => auth.logout());
+$('railList').addEventListener('click', e => {
+  const button = e.target.closest('.acct'); if (!button) return;
+  const account = state.accounts.find(a => a.id === Number(button.dataset.id));
+  if (account && (!state.current || account.id !== state.current.id)) selectAccount(account).catch(showError);
+});
+document.querySelectorAll('.side button').forEach(b => b.addEventListener('click', () => {
+  state.side = b.dataset.side;
+  document.querySelectorAll('.side button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.side === state.side)));
+  renderPreview();
+}));
+['qty', 'px'].forEach(id => {
+  $(id).addEventListener('input', () => { renderPreview(); validate(); });
+  $(id).addEventListener('blur', () => { $(id).dataset.touched = '1'; validate(); });
+});
+$('inst').addEventListener('change', () => { prefillPrice(); renderPreview(); validate(); clearFormError(); });
+$('book').addEventListener('click', book);
+$('ticket').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && !$('book').disabled) book(); });
+// Click or Enter on a position row pre-fills the ticket with that instrument.
+$('posBody').addEventListener('click', e => pickRow(e.target.closest('tr[data-instrument]')));
+$('posBody').addEventListener('keydown', e => { if (e.key === 'Enter') pickRow(e.target.closest('tr[data-instrument]')); });
+function pickRow(row) {
+  if (!row) return;
+  $('inst').value = row.dataset.instrument;
+  prefillPrice(); renderPreview(); validate();
+  $('qty').focus();
+}
+
+function showError(error) {
+  if (error && error.message === 'Signed out.') return;
+  showFieldError('formErr', (error && error.message) || 'Something did not load.');
+}
+
+// ---------------------------------------------------------------- boot
+async function start() {
+  $('signedOut').hidden = true;
+  $('shell').hidden = false;
+  const claims = auth.claims();
+  const roles = Array.isArray(claims.roles) ? claims.roles.filter(r => r === 'trader' || r === 'ops') : [];
+  $('who').innerHTML = `<b>${esc(claims.preferred_username || 'signed in')}</b>${roles.length ? ' · ' + esc(roles.join(', ')) : ''}`;
+
+  const [accounts, instruments] = await Promise.all([getJson('/api/accounts'), getJson('/api/instruments')]);
+  state.accounts = accounts;
+  state.instruments = instruments;
+  state.instrumentById = new Map(instruments.map(i => [i.id, i]));
+  $('inst').innerHTML = instruments.map(i => `<option value="${i.id}">${esc(i.symbol)} — ${esc(i.name)}</option>`).join('');
+  prefillPrice();
+
+  // The hub is nice to have; the page still works over REST if it fails.
+  await connectHub().catch(connectionLost);
+
+  if (accounts.length) await selectAccount(accounts[0]);
+  else { renderRail(); renderHeader(); renderPositions(); renderBlotter([]); }
+  validate();
+}
+
+(async () => {
+  try {
+    state.config = await (await fetch('api/client-config')).json();
+    const signedIn = await auth.init();
+    if (!signedIn) { showSignedOut(); return; }
+    await start();
+  } catch (error) {
+    showSignedOut(error.message || 'Could not start TradeBook.');
+  }
+})();
+})();
+</script>
+</body>
+</html>
