@@ -6,7 +6,9 @@ namespace TradeBook.Api.Features.TradeCapture;
 
 [ApiController]
 [Route("api/trades")]
-public sealed class TradesController(CaptureTradeHandler handler) : ControllerBase
+public sealed class TradesController(
+    CaptureTradeHandler captureHandler,
+    BlotterHandler blotterHandler) : ControllerBase
 {
     /// <summary>Capture an execution (design.md section 7).</summary>
     [HttpPost]
@@ -25,7 +27,7 @@ public sealed class TradesController(CaptureTradeHandler handler) : ControllerBa
         // this with the token's sub claim and makes it mandatory.
         var capturedBySubject = User.FindFirstValue("sub") ?? "anonymous";
 
-        var result = await handler.HandleAsync(request, capturedBySubject, cancellationToken);
+        var result = await captureHandler.HandleAsync(request, capturedBySubject, cancellationToken);
 
         return result switch
         {
@@ -45,5 +47,22 @@ public sealed class TradesController(CaptureTradeHandler handler) : ControllerBa
                 statusCode: StatusCodes.Status409Conflict),
             _ => throw new UnreachableException($"Unhandled result {result.GetType().Name}"),
         };
+    }
+
+    /// <summary>Blotter: an account's executions, newest first (design.md section 7).</summary>
+    [HttpGet]
+    [ProducesResponseType<BlotterPage>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Blotter([FromQuery] BlotterQuery query, CancellationToken cancellationToken)
+    {
+        var page = await blotterHandler.HandleAsync(query, cancellationToken);
+
+        return page is null
+            ? Problem(
+                title: "Unknown account",
+                detail: $"No account with id {query.AccountId} exists.",
+                statusCode: StatusCodes.Status404NotFound)
+            : Ok(page);
     }
 }

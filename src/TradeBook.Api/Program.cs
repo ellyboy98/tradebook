@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using TradeBook.Api.Features.Positions;
 using TradeBook.Api.Features.TradeCapture;
 using TradeBook.Api.Infrastructure.Health;
 using TradeBook.Api.Persistence;
@@ -37,6 +38,8 @@ try
     // Handlers are plain scoped classes (CLAUDE.md): one per request, same
     // lifetime as the DbContext they use.
     builder.Services.AddScoped<CaptureTradeHandler>();
+    builder.Services.AddScoped<BlotterHandler>();
+    builder.Services.AddScoped<GetPositionsHandler>();
 
     // The clock is injected so "not in the future" can be tested without
     // waiting, and so the audit timestamps come from one source.

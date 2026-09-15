@@ -61,6 +61,28 @@ public static class TradeCaptureTestSupport
         return (response, json);
     }
 
+    /// <summary>GETs a URL and returns the response with its body parsed as JSON.</summary>
+    public static async Task<(HttpResponseMessage Response, JsonElement Body)> GetJsonAsync(
+        this HttpClient client,
+        string url)
+    {
+        var response = await client.GetAsync(url);
+        var text = await response.Content.ReadAsStringAsync();
+
+        JsonElement json;
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            json = document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            json = JsonSerializer.SerializeToElement(new { raw = text });
+        }
+
+        return (response, json);
+    }
+
     public static IEnumerable<string?> FieldErrors(JsonElement problem, string field)
         => problem.GetProperty("errors").GetProperty(field).EnumerateArray().Select(e => e.GetString());
 
