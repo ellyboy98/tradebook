@@ -1,15 +1,20 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace TradeBook.Tests.Integration;
 
 /// <summary>
 /// Boots the real API in-process with its connection string pointed at
 /// whatever SQL Server the test supplies. Everything else runs exactly as it
-/// does in Program.cs.
+/// does in Program.cs, unless a test adds or replaces services through
+/// <paramref name="configureTestServices"/>.
 /// </summary>
-public sealed class TradeBookApiFactory(string connectionString) : WebApplicationFactory<Program>
+public sealed class TradeBookApiFactory(
+    string connectionString,
+    Action<IServiceCollection>? configureTestServices = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -23,5 +28,12 @@ public sealed class TradeBookApiFactory(string connectionString) : WebApplicatio
                 // The fixture owns the schema. Each factory must not race it.
                 ["Database:MigrateOnStartup"] = "false",
             }));
+
+        if (configureTestServices is not null)
+        {
+            // Runs after Program.cs has registered everything, so a test can
+            // add a service (an EF Core interceptor) or replace one.
+            builder.ConfigureTestServices(configureTestServices);
+        }
     }
 }

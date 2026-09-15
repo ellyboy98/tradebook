@@ -14,6 +14,7 @@ public sealed class TradesController(CaptureTradeHandler handler) : ControllerBa
     [ProducesResponseType<CaptureTradeResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Capture(CaptureTradeRequest request, CancellationToken cancellationToken)
     {
         // [ApiController] has already returned 400 for a body that does not
@@ -37,6 +38,11 @@ public sealed class TradesController(CaptureTradeHandler handler) : ControllerBa
                 statusCode: StatusCodes.Status404NotFound),
             CaptureTradeResult.Invalid invalid => ValidationProblem(
                 new ValidationProblemDetails(invalid.Errors.ToDictionary(e => e.Key, e => e.Value))),
+            // Wording from docs/ui-design.md section 7.
+            CaptureTradeResult.Conflict => Problem(
+                title: "Position changed",
+                detail: "The position changed while this was submitted. Book it again.",
+                statusCode: StatusCodes.Status409Conflict),
             _ => throw new UnreachableException($"Unhandled result {result.GetType().Name}"),
         };
     }

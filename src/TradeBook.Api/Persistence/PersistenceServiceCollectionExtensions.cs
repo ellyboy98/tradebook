@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace TradeBook.Api.Persistence;
 
@@ -21,6 +22,13 @@ public static class PersistenceServiceCollectionExtensions
                 ?? throw new InvalidOperationException($"Connection string '{ConnectionStringName}' is not configured.");
 
             options.UseSqlServer(connectionString);
+
+            // Any IInterceptor registered in DI is attached to every DbContext.
+            // Production registers none, so this is a no-op there. The
+            // integration tests register one to control the exact moment two
+            // requests read the same position, which is what makes the
+            // concurrency tests deterministic instead of a race against luck.
+            options.AddInterceptors(serviceProvider.GetServices<IInterceptor>());
         });
 
         return services;

@@ -23,4 +23,11 @@ public abstract record CaptureTradeResult
 
     /// <summary>One or more payload rules failed. 400, every failing field named.</summary>
     public sealed record Invalid(IReadOnlyDictionary<string, string[]> Errors) : CaptureTradeResult;
+
+    /// <summary>
+    /// Another request changed the position on every attempt and the retries
+    /// were exhausted (design.md section 6). Nothing was written. 409; the
+    /// caller may resubmit.
+    /// </summary>
+    public sealed record Conflict : CaptureTradeResult;
 }
