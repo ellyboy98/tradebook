@@ -31,6 +31,9 @@ public sealed class TradeBookApiFactory(
                 ["ConnectionStrings:TradeBook"] = connectionString,
                 // The fixture owns the schema. Each factory must not race it.
                 ["Database:MigrateOnStartup"] = "false",
+                // Prices must stay where the seed put them, or valuation
+                // assertions become guesses. Tests that need a tick run one.
+                ["PriceFeed:Enabled"] = "false",
             }));
 
         // Runs after Program.cs has registered everything.

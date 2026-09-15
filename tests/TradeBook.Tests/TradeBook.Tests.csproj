@@ -11,6 +11,8 @@
     <PackageReference Include="FluentAssertions" Version="7.2.2" />
     <!-- Hosts the API in-process for integration tests (WebApplicationFactory). -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.20" />
+    <!-- Connects to PositionHub through the in-process test server. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.20" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <!-- Starts a throwaway SQL Server in Docker for integration tests. -->
     <PackageReference Include="Testcontainers.MsSql" Version="4.15.0" />

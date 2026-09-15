@@ -9,6 +9,9 @@ namespace TradeBook.Api.Infrastructure.Auth;
 /// </summary>
 public static class AccountAccess
 {
+    /// <summary>Wording from docs/ui-design.md section 7, used by REST and the hub alike.</summary>
+    public const string DeniedMessage = "You do not have access to this account.";
+
     /// <param name="caller">Who is asking.</param>
     /// <param name="account">The account they asked for, or null if no such row exists.</param>
     public static AccessDecision Decide(Caller caller, Account? account)

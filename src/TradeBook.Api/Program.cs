@@ -3,7 +3,9 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
 using TradeBook.Api.Features.Positions;
+using TradeBook.Api.Features.PriceFeed;
 using TradeBook.Api.Features.TradeCapture;
+using TradeBook.Api.Hubs;
 using TradeBook.Api.Infrastructure.Auth;
 using TradeBook.Api.Infrastructure.Health;
 using TradeBook.Api.Persistence;
@@ -37,6 +39,9 @@ try
     builder.Services.AddTradeBookHealthChecks();
     builder.Services.AddTradeBookAuthentication();
     builder.Services.AddTradeBookAuthorization();
+    builder.Services.AddSignalR();
+    builder.Services.AddSingleton<IPositionNotifier, SignalRPositionNotifier>();
+    builder.Services.AddTradeBookPriceFeed();
 
     // Handlers are plain scoped classes (CLAUDE.md): one per request, same
     // lifetime as the DbContext they use.
@@ -69,6 +74,7 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
+    app.MapHub<PositionHub>("/hubs/positions");
     app.MapTradeBookHealthChecks();
 
     await app.RunAsync();

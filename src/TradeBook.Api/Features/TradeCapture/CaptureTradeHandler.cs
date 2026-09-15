@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using TradeBook.Api.Domain;
+using TradeBook.Api.Features.Positions;
 using TradeBook.Api.Infrastructure.Auth;
+using TradeBook.Api.Infrastructure.Time;
 using TradeBook.Api.Persistence;
 using TradeBook.Api.Persistence.Entities;
 
@@ -14,6 +16,7 @@ namespace TradeBook.Api.Features.TradeCapture;
 public sealed class CaptureTradeHandler(
     TradeBookDbContext dbContext,
     TimeProvider timeProvider,
+    IPositionNotifier notifier,
     ILogger<CaptureTradeHandler> logger)
 {
     /// <summary>Design.md section 6: three attempts, then 409.</summary>
@@ -90,7 +93,7 @@ public sealed class CaptureTradeHandler(
 
         // Payload rules (design.md section 3, B.4). All of them are checked so
         // the caller sees every problem at once, each under its field name.
-        var now = timeProvider.GetUtcNow();
+        var now = timeProvider.GetUtcNowToMilliseconds();
         var errors = Validate(request, account, instrument, now);
         if (errors.Count > 0)
         {
@@ -120,7 +123,7 @@ public sealed class CaptureTradeHandler(
             ExecutedAtUtc = request.ExecutedAtUtc.UtcDateTime,
             ExternalRef = request.ExternalRef,
             CapturedBySubject = caller.Subject,
-            CapturedAtUtc = now.UtcDateTime,
+            CapturedAtUtc = now,
         };
         // Added once, outside the loop. If a save attempt fails its transaction
         // rolls back, nothing is inserted, and this entity stays tracked as
@@ -146,7 +149,7 @@ public sealed class CaptureTradeHandler(
             // is inserted. EF Core orders the statements so the insert runs
             // first and the generated id lands in last_trade_id.
             position.LastTrade = trade;
-            position.UpdatedAtUtc = now.UtcDateTime;
+            position.UpdatedAtUtc = now;
 
             try
             {
@@ -157,8 +160,13 @@ public sealed class CaptureTradeHandler(
                 // has committed since, zero rows match and EF Core throws.
                 await dbContext.SaveChangesAsync(cancellationToken);
 
+                // Committed. Tell whoever is watching this account (design.md
+                // section 3, step B.9), then answer the caller.
+                var positionResponse = PositionResponse.From(position);
+                await notifier.PositionUpdatedAsync(positionResponse, cancellationToken);
+
                 return new CaptureTradeResult.Captured(
-                    new CaptureTradeResponse(TradeResponse.From(trade), PositionResponse.From(position)));
+                    new CaptureTradeResponse(TradeResponse.From(trade), positionResponse));
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -226,7 +234,7 @@ public sealed class CaptureTradeHandler(
         CaptureTradeRequest request,
         Account account,
         Instrument instrument,
-        DateTimeOffset now)
+        DateTime now)
     {
         // Keys are the JSON property names so they line up with what the
         // caller sent, and the wording follows docs/ui-design.md section 7.
@@ -252,7 +260,7 @@ public sealed class CaptureTradeHandler(
             errors["price"] = ["Price must be greater than zero."];
         }
 
-        if (request.ExecutedAtUtc > now)
+        if (request.ExecutedAtUtc.UtcDateTime > now)
         {
             errors["executedAtUtc"] = ["Execution time must not be in the future."];
         }
